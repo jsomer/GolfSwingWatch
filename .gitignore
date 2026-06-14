@@ -5,3 +5,12 @@ build/
 xcuserdata/
 .swiftpm/
 .env
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+**/node_modules/
+**/dist/
+*.tsbuildinfo
+analysis/output/
+data/

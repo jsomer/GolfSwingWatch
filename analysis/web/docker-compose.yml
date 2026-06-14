@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: analysis/web_api/Dockerfile
+    environment:
+      FEATURE_TABLE_PATH: /app/analysis/output/swing_features.parquet
+      RAW_SWINGS_PATH: /app/data/raw/swings.json
+      ALLOWED_ORIGINS: http://localhost:5173
+      API_KEY: ${API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../output:/app/analysis/output:ro
+      - ../../data/raw:/app/data/raw:ro
+
+  ui:
+    build:
+      context: ../..
+      dockerfile: analysis/web_ui/Dockerfile
+      args:
+        VITE_API_BASE: /api
+        VITE_API_KEY: ${API_KEY:-}
+    depends_on:
+      - api
+    ports:
+      - "5173:80"

@@ -1,0 +1,52 @@
+[
+  {
+    "id": "test-1",
+    "date": "2026-06-11T18:00:00Z",
+    "rating": 4,
+    "club": "7i",
+    "notes": "fixture swing",
+    "eventMarkers": [
+      { "timestamp": 0.0, "type": "start" },
+      { "timestamp": 0.4, "type": "impact" },
+      { "timestamp": 0.9, "type": "followThrough" }
+    ],
+    "samples": [
+      {
+        "timestamp": 0.0,
+        "accelX": 0.1,
+        "accelY": 0.0,
+        "accelZ": 0.2,
+        "gyroX": 0.5,
+        "gyroY": 0.2,
+        "gyroZ": 0.1,
+        "pitch": 0.01,
+        "roll": 0.02,
+        "yaw": 0.03
+      },
+      {
+        "timestamp": 0.2,
+        "accelX": 0.5,
+        "accelY": 0.3,
+        "accelZ": 0.4,
+        "gyroX": 1.2,
+        "gyroY": 0.8,
+        "gyroZ": 0.6,
+        "pitch": 0.03,
+        "roll": 0.02,
+        "yaw": 0.04
+      },
+      {
+        "timestamp": 0.5,
+        "accelX": 0.3,
+        "accelY": 0.2,
+        "accelZ": 0.1,
+        "gyroX": 0.9,
+        "gyroY": 0.5,
+        "gyroZ": 0.2,
+        "pitch": 0.02,
+        "roll": 0.01,
+        "yaw": 0.03
+      }
+    ]
+  }
+]
