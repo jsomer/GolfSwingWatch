@@ -22,7 +22,7 @@ flowchart LR
 | 1. Capture | Watch | Motion samples saved as `SwingRecord` |
 | 2. Sync | Watch → iPhone | JSON export transferred via WatchConnectivity |
 | 3. Export | iPhone → Mac | Share/AirDrop `golf_swings_export.json` |
-| 4. Import | Mac | Copy to `data/raw/` and generate feature files |
+| 4. Import | Mac | Merge into `data/raw/swings.json` and generate feature files |
 | 5. Analyze | Mac browser | Dashboard reads features + raw samples |
 
 ---
@@ -156,19 +156,21 @@ analysis/import_watch_export.sh --latest --delete-raw
 
 ### What the import script does
 
-1. Copies the export to `data/raw/swings.json` (overwrites previous import)
-2. Trims each swing to the detected phase window (address/takeaway through finish, max ~8 seconds)
-3. Runs `analysis/analyze_swings.py` to build feature tables
-4. Writes:
+1. **Merges** the export into `data/raw/swings.json` (Mac swing database — existing swings are kept)
+2. **Archives** a dated copy of each import under `data/exports/`
+3. Trims each swing to the detected phase window (address/takeaway through finish, max ~8 seconds)
+4. Runs `analysis/analyze_swings.py` to rebuild feature tables from the full database
+5. Writes:
    - `analysis/output/swing_features.parquet`
    - `analysis/output/swing_features.csv`
-5. Optionally removes the raw JSON with `--delete-raw`
 
-Each import **replaces** the previous analysis dataset — it does not merge swings from multiple exports. To keep a dated snapshot, copy the export before importing (see below).
+Imports **add and update** swings by `id`. Swings already on the Mac are not removed when you import a smaller iPhone export. To remove swings on the Mac, use `analysis/swing_store.py delete` (see below).
+
+> **Avoid `--delete-raw`** unless you intentionally want to wipe the Mac database after import. It is not needed for normal use.
 
 ### Verify the import
 
-The script prints how many records were loaded. You can also check manually:
+The merge step prints counts like `+2 new, 1 updated → 10 total`. You can also check manually:
 
 ```bash
 # Record count in the raw export
@@ -179,7 +181,35 @@ source .venv/bin/activate
 python -c "import pandas as pd; print(len(pd.read_parquet('analysis/output/swing_features.parquet')), 'swings')"
 ```
 
-Compare the count to the swing list in the iPhone app. If numbers don't match, you likely imported the wrong file — re-run with `--latest`.
+Compare the count to the swing list in the iPhone app. The Mac total may be **higher** than the iPhone if you have swings that were imported earlier and later deleted on the phone — that is expected when building a Mac archive. If the Mac count is **lower** than expected, re-run with `--latest` or check you imported the newest export file.
+
+### Mac swing database
+
+| Path | Role |
+|------|------|
+| `data/raw/swings.json` | Canonical Mac database (all swings + full sensor samples) |
+| `data/exports/` | Dated copies of each AirDrop import (audit trail) |
+| `analysis/output/swing_features.parquet` | Derived metrics rebuilt from the database |
+
+**List swings on the Mac:**
+
+```bash
+source .venv/bin/activate
+python -m analysis.swing_store list
+python -m analysis.swing_store stats
+```
+
+**Delete swings on the Mac only** (does not affect iPhone or watch):
+
+```bash
+python -m analysis.swing_store delete --id <SWING_UUID> --rebuild
+```
+
+**Rebuild features** after manual edits to `swings.json`:
+
+```bash
+python -m analysis.swing_store rebuild
+```
 
 ### Deleting stored swings
 
@@ -188,18 +218,13 @@ Compare the count to the swing list in the iPhone app. If numbers don't match, y
 | **Watch** | After iPhone confirms import (optional, on by default) | Toggle **Remove after iPhone sync** |
 | **Watch** | Any time | Trash button on saved swing row |
 | **iPhone** | On demand | Swipe left on session, or **Delete Swing** in detail view |
-| **Mac analysis** | On demand | Re-import with `--delete-raw`, or delete `data/raw/swings.json` manually |
+| **Mac database** | On demand | `python -m analysis.swing_store delete --id <UUID> --rebuild` |
 
-### Keep multiple sessions (optional)
+Deleting on iPhone does **not** remove swings already merged onto the Mac. That is intentional — the Mac keeps history unless you delete it there.
 
-Save dated copies before importing:
+### Legacy: replace-only import (not recommended)
 
-```bash
-cp ~/Downloads/golf_swings_export\ 4.json data/raw/swings_2026-06-14.json
-analysis/import_watch_export.sh data/raw/swings_2026-06-14.json
-```
-
-Only `data/raw/swings.json` is used by default for Movement Explorer. The import script overwrites it each run.
+Older workflow copied each export over `swings.json`, losing Mac-only swings. The merge behavior above is now the default. Do not use `--delete-raw` when building a long-term database.
 
 ---
 
@@ -220,12 +245,13 @@ Then **refresh** the browser at **http://localhost:5173** (no Docker restart nee
 
 | Step | Output | Purpose |
 |------|--------|---------|
-| Copy export → `data/raw/swings.json` | Raw JSON on disk | Movement Explorer reads full sensor traces |
+| Merge export → `data/raw/swings.json` | Raw JSON on disk | Accumulates swings; Mac-only records kept |
+| Archive import | `data/exports/*.json` | Dated copy of each AirDrop file |
 | Trim idle noise | Updated `swings.json` | Crops to phase window (~8s max) per swing |
 | `analyze_swings.py` | `swing_features.parquet` / `.csv` | KPIs, charts, phase metrics, fault flags |
 | Browser refresh | Dashboard updates | New swings appear in table + Movement Explorer |
 
-Each import **replaces** the previous Mac dataset (no merge). Compare swing counts with the iPhone app if anything looks missing.
+Each import **merges** into the Mac database by swing `id`. Use `swing_store delete` to remove swings on the Mac.
 
 ### Auto-import watcher (optional)
 
@@ -315,13 +341,16 @@ python analysis/analyze_swings.py \
 GolfSwingWatch/
   data/
     raw/
-      swings.json              # latest raw export (Movement Explorer reads this)
+      swings.json              # Mac swing database (merged imports)
+    exports/
+      *.json                   # archived AirDrop imports (dated)
   analysis/
     output/
       swing_features.parquet   # feature table (dashboard KPIs/charts)
       swing_features.csv       # same data in CSV form
-    import_watch_export.sh     # one-command import helper
+    import_watch_export.sh     # merge import helper
     watch_downloads_import.sh  # auto-import when AirDrop lands in Downloads
+    swing_store.py             # list / delete / rebuild Mac database
     analyze_swings.py          # feature extraction CLI
     pattern_inspector.py       # cohort pattern report CLI
     web/                       # Docker compose + web stack docs

@@ -38,10 +38,21 @@ See **[DATA_PIPELINE.md](../DATA_PIPELINE.md)** for the complete Watch → iPhon
 Quick import after AirDrop:
 
 ```bash
-analysis/import_watch_export.sh ~/Downloads/golf_swings_export.json
+analysis/import_watch_export.sh --latest
 ```
 
-Add `--delete-raw` to remove the copied JSON from `data/raw/` after features are generated.
+## Mac swing database
+
+Imports **merge** into `data/raw/swings.json` by swing `id` — the Mac keeps all swings unless you delete them:
+
+```bash
+analysis/import_watch_export.sh --latest
+python -m analysis.swing_store list
+python -m analysis.swing_store stats
+python -m analysis.swing_store delete --id <SWING_UUID> --rebuild
+```
+
+Each import is also archived under `data/exports/`. See **[DATA_PIPELINE.md](../DATA_PIPELINE.md)** for the full workflow.
 
 ## Run regression tests
 

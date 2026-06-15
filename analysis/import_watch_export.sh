@@ -91,8 +91,7 @@ fi
 
 warn_if_stale_export "$INPUT_PATH"
 
-mkdir -p "$ROOT_DIR/data/raw" "$ROOT_DIR/analysis/output"
-cp "$INPUT_PATH" "$ROOT_DIR/data/raw/swings.json"
+mkdir -p "$ROOT_DIR/data/raw" "$ROOT_DIR/data/exports" "$ROOT_DIR/analysis/output"
 
 if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
   PYTHON="$ROOT_DIR/.venv/bin/python"
@@ -101,6 +100,8 @@ else
 fi
 
 cd "$ROOT_DIR"
+"$PYTHON" -m analysis.swing_store merge --input "$INPUT_PATH"
+
 "$PYTHON" - <<'PY'
 from pathlib import Path
 from analysis.swing_trim import trim_json_file
@@ -114,6 +115,8 @@ PY
   --output-dir "$ROOT_DIR/analysis/output"
 
 if [[ "$DELETE_RAW" == "true" ]]; then
+  echo "WARNING: --delete-raw removes the Mac swing database (data/raw/swings.json)." >&2
+  echo "         Omit --delete-raw to keep accumulating swings across imports." >&2
   rm -f "$ROOT_DIR/data/raw/swings.json"
   echo "Removed data/raw/swings.json after import."
 fi
