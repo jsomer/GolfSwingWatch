@@ -1,6 +1,7 @@
 import type {
   MovementDetail,
   MovementSwingsResponse,
+  PatternReport,
   RecordsResponse,
   SummaryResponse
 } from "./types";
@@ -64,4 +65,24 @@ export const fetchMovementDetail = async (swingId: string): Promise<MovementDeta
     throw new Error(`Failed to load movement detail (${response.status})`);
   }
   return (await response.json()) as MovementDetail;
+};
+
+export const fetchPatterns = async (
+  filters: Filters,
+  options?: { llm?: boolean }
+): Promise<PatternReport> => {
+  const params = new URLSearchParams();
+  filters.clubs.forEach((club) => params.append("clubs", club));
+  filters.ratings.forEach((rating) => params.append("ratings", String(rating)));
+  if (options?.llm) {
+    params.append("llm", "true");
+  }
+  const query = params.toString();
+  const response = await fetch(`${API_BASE}/patterns${query ? `?${query}` : ""}`, {
+    headers: API_KEY ? { "X-API-Key": API_KEY } : undefined
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load pattern report (${response.status})`);
+  }
+  return (await response.json()) as PatternReport;
 };

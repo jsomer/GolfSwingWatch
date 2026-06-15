@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from analysis.movement_viz import find_swing, load_raw_swings, movement_catalog, movement_payload
+from analysis.pattern_inspector import inspect_patterns
 
 from .data_access import load_features
 
@@ -144,6 +145,32 @@ def create_app(
         serializable = serializable.where(serializable.notna(), None)
 
         return {"count": int(len(serializable)), "items": serializable.to_dict(orient="records")}
+
+    @app.get("/patterns")
+    def patterns(
+        _: None = Depends(require_api_key),
+        clubs: list[str] | None = Query(default=None),
+        ratings: list[int] | None = Query(default=None),
+        start_date: date | None = Query(default=None),
+        end_date: date | None = Query(default=None),
+        low_rating: int = Query(default=2, ge=1, le=5),
+        high_rating: int = Query(default=4, ge=1, le=5),
+        llm: bool = Query(default=False),
+    ) -> dict[str, Any]:
+        try:
+            frame = load_features(features_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        filtered = _apply_filters(frame, clubs, ratings, start_date, end_date)
+        return inspect_patterns(
+            filtered,
+            low_rating_threshold=low_rating,
+            high_rating_threshold=high_rating,
+            include_llm=llm,
+        )
 
     @app.get("/movement/swings")
     def movement_swings(_: None = Depends(require_api_key)) -> dict[str, Any]:

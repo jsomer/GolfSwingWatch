@@ -258,6 +258,7 @@ For near-instant detection, install [fswatch](https://github.com/emcrisostomo/fs
 [ ] Mac:  analysis/import_watch_export.sh --latest
         — or leave analysis/watch_downloads_import.sh running
 [ ] Mac:  Refresh http://localhost:5173
+[ ] Optional: Pattern Inspector → Generate AI summary (OPENAI_API_KEY in analysis/web/.env)
 [ ] Optional: verify swing count matches iPhone Sessions list
 ```
 
@@ -280,8 +281,22 @@ Open **http://localhost:5173**
 |---------|-------------|---------|
 | KPIs, charts, table | `analysis/output/swing_features.parquet` | Per-swing metrics (tempo, peak rotation, etc.) |
 | Movement Explorer | `data/raw/swings.json` | Raw time-series + 3D watch-face visualizer |
+| Pattern Inspector | `swing_features.parquet` | Low vs high-rated cohort patterns and fault trends |
 
 After importing new swings, **refresh the browser**. No Docker restart is needed — the compose file bind-mounts `analysis/output/` and `data/raw/` read-only into the API container.
+
+For **Pattern Inspector**, rate some swings ≤2 and others ≥4 — all-middle ratings (e.g. every swing a 3) produce no cohort patterns. Optional **Generate AI summary** needs `OPENAI_API_KEY` in `analysis/web/.env`.
+
+### Pattern report (CLI)
+
+```bash
+source .venv/bin/activate
+python analysis/pattern_inspector.py --features analysis/output/swing_features.parquet
+python analysis/pattern_inspector.py --output analysis/output/pattern_report.md
+python analysis/pattern_inspector.py --llm --output analysis/output/pattern_report.md
+```
+
+Set `OPENAI_API_KEY` in your shell or `analysis/web/.env` (Docker) before using `--llm` or the dashboard **Generate AI summary** button.
 
 ### Generate features manually (without import script)
 
@@ -308,6 +323,7 @@ GolfSwingWatch/
     import_watch_export.sh     # one-command import helper
     watch_downloads_import.sh  # auto-import when AirDrop lands in Downloads
     analyze_swings.py          # feature extraction CLI
+    pattern_inspector.py       # cohort pattern report CLI
     web/                       # Docker compose + web stack docs
 ```
 

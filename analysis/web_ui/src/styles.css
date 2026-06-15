@@ -129,8 +129,98 @@ body {
   gap: 1rem;
 }
 
-.charts article,
+.charts article {
+  margin-top: 2rem;
+}
+
+.pattern-inspector {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.pattern-inspector h3 {
+  margin-top: 0;
+}
+
+.pattern-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.pattern-llm-button {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pattern-llm-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pattern-llm-narrative {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+}
+
+.pattern-llm-narrative h4 {
+  margin: 0 0 0.5rem;
+}
+
+.pattern-llm-narrative p {
+  margin: 0.35rem 0;
+  color: #374151;
+  line-height: 1.45;
+}
+
+.pattern-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.pattern-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.pattern-list li {
+  margin-bottom: 1rem;
+}
+
+.pattern-list p {
+  margin: 0.25rem 0 0.35rem;
+  color: #4b5563;
+}
+
+.pattern-list ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.pattern-empty {
+  color: #6b7280;
+}
+
 .records {
+  margin-top: 2rem;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 10px;

@@ -27,7 +27,13 @@ The default app reads `analysis/output/swing_features.parquet` then CSV fallback
 
 - `ALLOWED_ORIGINS`: comma-separated CORS allowlist.  
   Default: `http://localhost:5173,http://127.0.0.1:5173`
-- `API_KEY`: if set, `GET /summary` and `GET /records` require header `X-API-Key`.
+- `API_KEY`: if set, data endpoints require header `X-API-Key`.
+
+### Optional LLM env vars (Pattern Inspector AI summary)
+
+- `OPENAI_API_KEY`: required for `GET /patterns?llm=true` and the dashboard **Generate AI summary** button
+- `OPENAI_MODEL`: default `gpt-4o-mini`
+- `OPENAI_BASE_URL`: default `https://api.openai.com/v1` (any OpenAI-compatible endpoint)
 
 ## 2) Start React frontend
 
@@ -76,6 +82,20 @@ analysis/import_watch_export.sh ~/Downloads/golf_swings_export.json
 ```
 
 Then refresh `http://localhost:5173`.
+
+## Pattern Inspector
+
+Between the charts and Movement Explorer, **Pattern Inspector** compares low-rated (≤2) vs high-rated (≥4) swings using fault flags and phase metrics from the feature table.
+
+- Loads automatically when you open the dashboard (no LLM call).
+- Click **Generate AI summary** to request a narrative via `GET /patterns?llm=true` (requires `OPENAI_API_KEY` in `analysis/web/.env` for Docker).
+- For useful patterns, rate some swings 1–2 and others 4–5 after recording.
+
+CLI equivalent:
+
+```bash
+python analysis/pattern_inspector.py --llm --output analysis/output/pattern_report.md
+```
 
 ## Movement Explorer (Plotly)
 
@@ -135,6 +155,7 @@ docker compose -f analysis/web/docker-compose.yml --env-file analysis/web/.env d
 - `GET /health`
 - `GET /summary` with optional query params: `clubs`, `ratings`, `start_date`, `end_date`
 - `GET /records` with optional query params: `limit`, `clubs`, `ratings`, `start_date`, `end_date`
+- `GET /patterns` cohort pattern report; optional `llm=true` for AI narrative; optional `low_rating`, `high_rating`
 - `GET /movement/swings` list swings available in raw export JSON
 - `GET /movement/{swing_id}` time-series sensor trace for Plotly movement charts
 

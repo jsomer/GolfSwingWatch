@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { fetchRecords, fetchSummary } from "./api";
 import { MovementExplorer } from "./MovementExplorer";
+import { PatternInspector } from "./PatternInspector";
 import type { RecordsResponse, SummaryResponse } from "./types";
 
 const COLORS = ["#1e88e5", "#43a047", "#fb8c00", "#8e24aa", "#ef5350"];
@@ -246,6 +247,8 @@ export function App() {
           </ResponsiveContainer>
         </article>
       </section>
+
+      <PatternInspector selectedClubs={selectedClubs} selectedRatings={selectedRatings} />
 
       <MovementExplorer />
 

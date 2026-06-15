@@ -7,6 +7,54 @@ export type SummaryResponse = {
   ratings: number[];
 };
 
+export type PatternSwingBrief = {
+  id: string;
+  date: string;
+  club: string;
+  rating: number | null;
+  tempo_ratio: number | null;
+  fault_flags: string[];
+};
+
+export type PatternItem = {
+  kind: "fault" | "metric";
+  title: string;
+  summary: string;
+  fault?: string;
+  metric?: string;
+  low_prevalence?: number;
+  high_prevalence?: number;
+  low_average?: number;
+  high_average?: number;
+  delta_ratio?: number;
+  affected_swings?: PatternSwingBrief[];
+};
+
+export type PatternReport = {
+  analysis_version: string;
+  swing_count: number;
+  low_rated_count: number;
+  high_rated_count: number;
+  low_rating_threshold: number;
+  high_rating_threshold: number;
+  practice: {
+    practice_count: number;
+    full_count: number;
+    practice_pct: number | null;
+  };
+  phase_chain: {
+    complete_count: number;
+    complete_pct: number | null;
+  };
+  low_rated_faults: Record<string, number>;
+  high_rated_faults: Record<string, number>;
+  patterns: PatternItem[];
+  markdown: string;
+  llm_narrative?: string | null;
+  llm_error?: string | null;
+  llm_model?: string | null;
+};
+
 export type RecordsResponse = {
   count: number;
   items: Record<string, string | number | null>[];

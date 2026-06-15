@@ -67,6 +67,32 @@ def test_api_key_protects_data_endpoints(tmp_path):
     assert authorized.status_code == 200
 
 
+def test_patterns_endpoint(tmp_path):
+    csv_path = tmp_path / "features.csv"
+    _write_fixture_csv(csv_path)
+    client = TestClient(create_app(features_path=str(csv_path)))
+
+    response = client.get("/patterns")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["swing_count"] == 2
+    assert "patterns" in payload
+    assert "markdown" in payload
+    assert payload.get("llm_narrative") is None
+
+
+def test_patterns_endpoint_llm_without_api_key(tmp_path):
+    csv_path = tmp_path / "features.csv"
+    _write_fixture_csv(csv_path)
+    client = TestClient(create_app(features_path=str(csv_path)))
+
+    response = client.get("/patterns", params={"llm": "true"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("llm_narrative") is None
+    assert payload.get("llm_error")
+
+
 def test_movement_endpoints(tmp_path):
     csv_path = tmp_path / "features.csv"
     raw_path = tmp_path / "swings.json"

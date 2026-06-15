@@ -69,10 +69,29 @@ For a split backend/frontend browser architecture, see:
 
 - `analysis/web/README.md`
 
+## Pattern Inspector
+
+Compare low-rated vs high-rated swing cohorts using fault flags and phase metrics:
+
+```bash
+source .venv/bin/activate
+python analysis/pattern_inspector.py --features analysis/output/swing_features.parquet
+python analysis/pattern_inspector.py --output analysis/output/pattern_report.md
+```
+
+Optional AI narrative (requires `OPENAI_API_KEY`):
+
+```bash
+python analysis/pattern_inspector.py --llm --output analysis/output/pattern_report.md
+```
+
+Patterns are strongest when you have swings rated ≤2 and ≥4. All-middle ratings produce an empty pattern list.
+
 ## Output files
 
 - `analysis/output/swing_features.csv`
 - `analysis/output/swing_features.parquet`
+- `analysis/output/pattern_report.md` (optional, from `pattern_inspector.py`)
 
 ## Initial metrics
 
@@ -85,10 +104,12 @@ For a split backend/frontend browser architecture, see:
 - `swing_plane_stability`
 - `time_to_impact_seconds` (from markers)
 - `follow_through_seconds` (from markers)
-- `tempo_ratio` (`time_to_impact_seconds` / `follow_through_seconds`)
+- `tempo_ratio` (backswing / downswing duration from phase detection; see `tempo_source`)
+- `follow_through_rotation_deg` and related follow-through metrics (practice swings)
+- `fault_flags`, `phase_chain_complete`, `swing_mode` (practice vs full)
 
 ## Next additions
 
 - Session-level aggregations (consistency per day/week).
-- Filtering and smoothing options.
-- Side-by-side comparisons by club and rating bands.
+- ML rating classifier once enough labeled swings exist.
+- Side-by-side swing comparisons in the dashboard.
