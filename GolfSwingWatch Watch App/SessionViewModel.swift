@@ -93,17 +93,37 @@ final class SessionViewModel: ObservableObject {
         Task { @MainActor in
             await Task.yield()
 
-            let analytics = extractor.extract(samples: samples, markers: markers)
+            let origin = SwingTimestampNormalization.origin(for: samples)
+            let normalizedSamples = SwingTimestampNormalization.normalize(samples: samples, origin: origin)
+            let normalizedMarkers = SwingTimestampNormalization.normalize(markers: markers, origin: origin)
+
+            let prePhaseAnalysis = SwingPhaseDetector.analyze(
+                samples: normalizedSamples,
+                legacyMarkers: normalizedMarkers
+            )
+            let trimmed = SwingPhaseTrim.trim(
+                samples: normalizedSamples,
+                markers: normalizedMarkers,
+                detectedEvents: prePhaseAnalysis.detectedEvents
+            )
+            let phaseAnalysis = SwingPhaseDetector.analyze(
+                samples: trimmed.samples,
+                legacyMarkers: trimmed.markers
+            )
+            let analytics = extractor.extract(
+                samples: trimmed.samples,
+                markers: trimmed.markers,
+                detectedEvents: phaseAnalysis.detectedEvents
+            )
             let recommendations = coach.recommendations(for: analytics, rating: rating)
-            let phaseAnalysis = SwingPhaseDetector.analyze(samples: samples, legacyMarkers: markers)
             let record = SwingRecord(
                 id: UUID(),
                 date: Date(),
                 rating: rating,
                 club: club,
                 notes: notes,
-                samples: samples,
-                eventMarkers: markers,
+                samples: trimmed.samples,
+                eventMarkers: trimmed.markers,
                 analytics: analytics,
                 recommendations: recommendations,
                 swingMode: phaseAnalysis.swingMode,

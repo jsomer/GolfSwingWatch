@@ -72,7 +72,11 @@ final class PhoneSyncService: NSObject, ObservableObject {
             let records = try SwingExporter.readRecords(from: url)
             let repository = SwingRepository(modelContext: modelContext)
             for record in records {
-                try repository.save(record: record)
+                let normalized = SwingTimestampNormalization.normalizeRecord(
+                    record,
+                    reanalyzePhases: record.detectedEvents.isEmpty
+                )
+                try repository.save(record: normalized)
             }
             lastImportedCount = records.count
             statusMessage = "Imported \(records.count) swing(s) from watch"

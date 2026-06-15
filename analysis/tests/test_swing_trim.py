@@ -95,7 +95,7 @@ def test_trim_samples_removes_leading_and_trailing_noise() -> None:
 
 
 def test_trim_record_rebases_markers() -> None:
-    trimmed = trim_record(NOISY_SWING)
+    trimmed = trim_record(NOISY_SWING, phase_trim=False)
 
     assert len(trimmed["samples"]) == 2
     assert trimmed["eventMarkers"] == [

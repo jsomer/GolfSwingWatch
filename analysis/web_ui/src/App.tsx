@@ -185,7 +185,7 @@ export function App() {
           <strong>{formatNumber(summary?.avg_rating ?? null)}</strong>
         </article>
         <article>
-          <h2>Avg Tempo Ratio</h2>
+          <h2>Avg Tempo (BS/DS)</h2>
           <strong>{formatNumber(summary?.avg_tempo_ratio ?? null)}</strong>
         </article>
         <article>
@@ -217,7 +217,7 @@ export function App() {
         </article>
 
         <article>
-          <h3>Tempo Trend</h3>
+          <h3>Tempo Trend (backswing / downswing)</h3>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={tempoTrend}>
               <CartesianGrid strokeDasharray="3 3" />

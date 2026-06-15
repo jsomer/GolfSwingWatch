@@ -170,7 +170,10 @@ def extract_features(record: dict[str, Any]) -> dict[str, Any]:
     orientation_std = frame[["pitch", "roll", "yaw"]].std(ddof=0).mean()
     swing_plane_stability = 1.0 / (1.0 + float(orientation_std if pd.notna(orientation_std) else 0.0))
 
-    time_to_impact_seconds, follow_through_seconds, tempo_ratio = _tempo_metrics(legacy_markers)
+    time_to_impact_seconds, follow_through_seconds, legacy_tempo_ratio = _tempo_metrics(legacy_markers)
+    phase_tempo_ratio = phase_metrics.get("transition_ratio")
+    tempo_ratio = phase_tempo_ratio if phase_tempo_ratio is not None else legacy_tempo_ratio
+    tempo_source = "phase" if phase_tempo_ratio is not None else "legacy"
 
     if len(frame) > 0:
         duration_seconds = float(frame["timestamp"].iloc[-1] - frame["timestamp"].iloc[0])
@@ -198,7 +201,8 @@ def extract_features(record: dict[str, Any]) -> dict[str, Any]:
         "detected_events": json.dumps(detected_events),
         "backswing_duration_seconds": phase_metrics.get("backswing_duration_seconds"),
         "downswing_duration_seconds": phase_metrics.get("downswing_duration_seconds"),
-        "phase_transition_ratio": phase_metrics.get("transition_ratio"),
+        "phase_transition_ratio": phase_tempo_ratio,
+        "tempo_source": tempo_source,
         "sample_count": int(len(frame)),
         "duration_seconds": duration_seconds,
         "peak_accel_g": float(np.nanmax(accel_mag)) if len(accel_mag) else 0.0,

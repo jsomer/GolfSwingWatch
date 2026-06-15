@@ -27,7 +27,9 @@ def test_extract_features_from_fixture_record() -> None:
     assert result["duration_seconds"] == pytest.approx(0.9)
     assert result["time_to_impact_seconds"] == pytest.approx(0.4)
     assert result["follow_through_seconds"] == pytest.approx(0.5)
-    assert result["tempo_ratio"] == pytest.approx(0.8)
+    assert result["tempo_source"] == "phase"
+    assert result["tempo_ratio"] == result["phase_transition_ratio"]
+    assert result["tempo_ratio"] is not None
     assert result["peak_accel_g"] > 0
     assert result["peak_rotational_velocity"] > 0
     assert 0 < result["swing_plane_stability"] <= 1

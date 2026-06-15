@@ -10,22 +10,25 @@ struct SwingPhaseLabelView: View {
     @State private var hasEdits = false
 
     private var duration: Double {
-        guard let first = record.samples.first?.timestamp,
-              let last = record.samples.last?.timestamp else { return 1 }
-        return max(last - first, 0.1)
+        SwingTimestampNormalization.swingDuration(for: record.samples)
     }
 
     init(record: SwingRecord, onSave: @escaping (SwingRecord) -> Void) {
         self.record = record
         self.onSave = onSave
         let baseline = record.confirmedEvents.isEmpty ? record.detectedEvents : record.confirmedEvents
-        _editableEvents = State(initialValue: baseline)
+        let sortedBaseline = SwingTimestampNormalization.sortedForDisplay(baseline)
+        _editableEvents = State(initialValue: sortedBaseline)
         _selectedFlawTags = State(initialValue: Set(record.flawTags))
         _swingMode = State(initialValue: record.swingMode)
     }
 
     var body: some View {
         Section("Swing Phases") {
+            Text("Times are seconds from the start of this swing clip.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Picker("Mode", selection: $swingMode) {
                 ForEach(SwingMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue.capitalized).tag(mode)
@@ -34,7 +37,7 @@ struct SwingPhaseLabelView: View {
             .onChange(of: swingMode) { _, _ in hasEdits = true }
 
             if editableEvents.isEmpty {
-                Text("No phases detected. Re-import after recording on watch.")
+                Text("No phases detected yet.")
                     .foregroundStyle(.secondary)
                     .font(.caption)
             } else {
@@ -44,7 +47,7 @@ struct SwingPhaseLabelView: View {
             }
 
             Button("Reset to detected phases") {
-                editableEvents = record.detectedEvents
+                editableEvents = SwingTimestampNormalization.sortedForDisplay(record.detectedEvents)
                 selectedFlawTags = Set(record.flawTags)
                 swingMode = record.swingMode
                 hasEdits = true
@@ -81,7 +84,7 @@ struct SwingPhaseLabelView: View {
                     get: { editableEvents[index].timestamp },
                     set: { newValue in
                         editableEvents[index] = DetectedSwingEvent(
-                            timestamp: newValue,
+                            timestamp: min(max(newValue, 0), duration),
                             type: event.type,
                             confidence: 1.0,
                             source: "user"
@@ -135,7 +138,7 @@ struct SwingPhaseLabelView: View {
             recommendations: record.recommendations,
             swingMode: swingMode,
             detectedEvents: record.detectedEvents,
-            confirmedEvents: editableEvents.sorted { $0.timestamp < $1.timestamp },
+            confirmedEvents: SwingTimestampNormalization.sortedForDisplay(editableEvents),
             flawTags: Array(selectedFlawTags).sorted(),
             analysisVersion: record.analysisVersion ?? SwingPhaseDetector.analysisVersion
         )

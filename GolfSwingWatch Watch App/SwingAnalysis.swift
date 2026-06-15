@@ -1,7 +1,11 @@
 import Foundation
 
 struct SwingFeatureExtractor {
-    func extract(samples: [SwingSample], markers: [SwingEventMarker]) -> SwingAnalytics {
+    func extract(
+        samples: [SwingSample],
+        markers: [SwingEventMarker],
+        detectedEvents: [DetectedSwingEvent] = []
+    ) -> SwingAnalytics {
         guard !samples.isEmpty else {
             return SwingAnalytics(
                 tempoRatio: 1.0,
@@ -26,7 +30,9 @@ struct SwingFeatureExtractor {
         let start = markers.first(where: { $0.type == .start })?.timestamp
         let impact = markers.first(where: { $0.type == .impact })?.timestamp
         let follow = markers.first(where: { $0.type == .followThrough })?.timestamp
-        let tempoRatio = computeTempoRatio(start: start, impact: impact, follow: follow)
+        let phaseTempo = computePhaseTempo(events: detectedEvents)
+        let legacyTempo = computeTempoRatio(start: start, impact: impact, follow: follow)
+        let tempoRatio = phaseTempo ?? legacyTempo
 
         let confidence = min(1.0, Double(samples.count) / 300.0)
 
@@ -37,6 +43,27 @@ struct SwingFeatureExtractor {
             swingPlaneStability: swingPlaneStability,
             confidence: confidence
         )
+    }
+
+    private func computePhaseTempo(events: [DetectedSwingEvent]) -> Double? {
+        func eventTime(_ types: [String]) -> Double? {
+            for type in types {
+                if let event = events.first(where: { $0.type == type }) {
+                    return event.timestamp
+                }
+            }
+            return nil
+        }
+
+        guard let takeaway = eventTime(["takeaway", "start"]),
+              let top = eventTime(["top"]),
+              let finish = eventTime(["finish", "followThrough"]) else {
+            return nil
+        }
+        let backswing = top - takeaway
+        let downswing = finish - top
+        guard backswing > 0, downswing > 0 else { return nil }
+        return backswing / downswing
     }
 
     private func computeTempoRatio(start: Double?, impact: Double?, follow: Double?) -> Double {

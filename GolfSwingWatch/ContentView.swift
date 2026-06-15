@@ -226,7 +226,7 @@ private struct SessionDetailView: View {
         }
         .navigationTitle("Swing Detail")
         .onAppear {
-            ensurePhaseAnalysis()
+            repairRecordIfNeeded()
         }
         .confirmationDialog(
             "Delete this swing?",
@@ -240,30 +240,17 @@ private struct SessionDetailView: View {
         }
     }
 
-    private func ensurePhaseAnalysis() {
-        guard workingRecord.detectedEvents.isEmpty else { return }
-        let analysis = SwingPhaseDetector.analyze(
-            samples: workingRecord.samples,
-            legacyMarkers: workingRecord.eventMarkers
+    private func repairRecordIfNeeded() {
+        let needsFix = SwingTimestampNormalization.needsNormalization(for: workingRecord)
+            || workingRecord.detectedEvents.isEmpty
+        guard needsFix else { return }
+
+        let repaired = SwingTimestampNormalization.normalizeRecord(
+            workingRecord,
+            reanalyzePhases: workingRecord.detectedEvents.isEmpty
         )
-        let enriched = SwingRecord(
-            id: workingRecord.id,
-            date: workingRecord.date,
-            rating: workingRecord.rating,
-            club: workingRecord.club,
-            notes: workingRecord.notes,
-            samples: workingRecord.samples,
-            eventMarkers: workingRecord.eventMarkers,
-            analytics: workingRecord.analytics,
-            recommendations: workingRecord.recommendations,
-            swingMode: analysis.swingMode,
-            detectedEvents: analysis.detectedEvents,
-            confirmedEvents: workingRecord.confirmedEvents,
-            flawTags: analysis.faultFlags,
-            analysisVersion: analysis.analysisVersion
-        )
-        workingRecord = enriched
-        persist(enriched)
+        workingRecord = repaired
+        persist(repaired)
     }
 
     private func persist(_ record: SwingRecord) {

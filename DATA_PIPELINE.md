@@ -157,7 +157,7 @@ analysis/import_watch_export.sh --latest --delete-raw
 ### What the import script does
 
 1. Copies the export to `data/raw/swings.json` (overwrites previous import)
-2. Trims idle noise before/after each swing using accel + gyro magnitude thresholds
+2. Trims each swing to the detected phase window (address/takeaway through finish, max ~8 seconds)
 3. Runs `analysis/analyze_swings.py` to build feature tables
 4. Writes:
    - `analysis/output/swing_features.parquet`
@@ -200,6 +200,66 @@ analysis/import_watch_export.sh data/raw/swings_2026-06-14.json
 ```
 
 Only `data/raw/swings.json` is used by default for Movement Explorer. The import script overwrites it each run.
+
+---
+
+## After data reaches the Mac
+
+The watch and iPhone steps are done once AirDrop (or Files copy) lands `golf_swings_export*.json` in **Downloads**. Everything below happens on the Mac only.
+
+### Do this every time (manual)
+
+```bash
+# From repo root
+analysis/import_watch_export.sh --latest
+```
+
+Then **refresh** the browser at **http://localhost:5173** (no Docker restart needed).
+
+### What happens during import
+
+| Step | Output | Purpose |
+|------|--------|---------|
+| Copy export → `data/raw/swings.json` | Raw JSON on disk | Movement Explorer reads full sensor traces |
+| Trim idle noise | Updated `swings.json` | Crops to phase window (~8s max) per swing |
+| `analyze_swings.py` | `swing_features.parquet` / `.csv` | KPIs, charts, phase metrics, fault flags |
+| Browser refresh | Dashboard updates | New swings appear in table + Movement Explorer |
+
+Each import **replaces** the previous Mac dataset (no merge). Compare swing counts with the iPhone app if anything looks missing.
+
+### Auto-import watcher (optional)
+
+Leave this running in a terminal while you practice — it imports whenever a new export appears in Downloads:
+
+```bash
+analysis/watch_downloads_import.sh
+```
+
+Import the newest file once and exit:
+
+```bash
+analysis/watch_downloads_import.sh --once
+```
+
+| Watcher flag | Effect |
+|--------------|--------|
+| `--downloads-dir PATH` | Watch a folder other than `~/Downloads` |
+| `--poll-seconds N` | Poll interval when `fswatch` is not installed (default 5) |
+| `--delete-raw` | Remove `data/raw/swings.json` after features are built |
+| `--once` | Import newest export now, then exit |
+
+For near-instant detection, install [fswatch](https://github.com/emcrisostomo/fswatch) (`brew install fswatch`). Without it, the script polls every few seconds.
+
+### Mac quick checklist
+
+```text
+[ ] Dashboard running (docker compose … up)
+[ ] iPhone: Export → Share → AirDrop to Mac
+[ ] Mac:  analysis/import_watch_export.sh --latest
+        — or leave analysis/watch_downloads_import.sh running
+[ ] Mac:  Refresh http://localhost:5173
+[ ] Optional: verify swing count matches iPhone Sessions list
+```
 
 ---
 
@@ -246,6 +306,7 @@ GolfSwingWatch/
       swing_features.parquet   # feature table (dashboard KPIs/charts)
       swing_features.csv       # same data in CSV form
     import_watch_export.sh     # one-command import helper
+    watch_downloads_import.sh  # auto-import when AirDrop lands in Downloads
     analyze_swings.py          # feature extraction CLI
     web/                       # Docker compose + web stack docs
 ```
@@ -259,7 +320,7 @@ GolfSwingWatch/
 [ ] Watch: Send All to iPhone (or rely on per-save sync)
 [ ] iPhone: Confirm swings in Sessions / Watch Sync
 [ ] iPhone: Export → Share → AirDrop to Mac
-[ ] Mac:  analysis/import_watch_export.sh --latest
+[ ] Mac:  analysis/import_watch_export.sh --latest  (or watch_downloads_import.sh)
 [ ] Mac:  Refresh http://localhost:5173
 ```
 
@@ -276,6 +337,7 @@ GolfSwingWatch/
 | New swings missing after import | Imported stale export file | macOS renamed newer AirDrops; use `--latest` or pick the newest `golf_swings_export*.json` in Downloads |
 | Import script WARNING about newer file | Explicit path points to old export | Re-run with `--latest` |
 | Movement Explorer empty | No raw JSON | Confirm `data/raw/swings.json` exists after import (omit `--delete-raw`) |
+| Forgot to import after AirDrop | Manual step skipped | Run `--latest` or start `watch_downloads_import.sh` |
 | Duplicate swings, same data | Saved without new capture | Use full Start → Stop → Save cycle each time |
 
 ---
