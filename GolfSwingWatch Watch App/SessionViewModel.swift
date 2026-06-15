@@ -95,6 +95,7 @@ final class SessionViewModel: ObservableObject {
 
             let analytics = extractor.extract(samples: samples, markers: markers)
             let recommendations = coach.recommendations(for: analytics, rating: rating)
+            let phaseAnalysis = SwingPhaseDetector.analyze(samples: samples, legacyMarkers: markers)
             let record = SwingRecord(
                 id: UUID(),
                 date: Date(),
@@ -104,7 +105,11 @@ final class SessionViewModel: ObservableObject {
                 samples: samples,
                 eventMarkers: markers,
                 analytics: analytics,
-                recommendations: recommendations
+                recommendations: recommendations,
+                swingMode: phaseAnalysis.swingMode,
+                detectedEvents: phaseAnalysis.detectedEvents,
+                flawTags: phaseAnalysis.faultFlags,
+                analysisVersion: phaseAnalysis.analysisVersion
             )
 
             do {

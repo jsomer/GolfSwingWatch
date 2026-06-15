@@ -326,3 +326,62 @@ def apply_fault_wrist_rotation(analysis: dict[str, Any], wrist_rotation_deg: flo
         flags.append("excessive_wrist_roll")
     analysis["faultFlags"] = flags
     return analysis
+
+
+def _normalize_export_events(raw_events: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_events, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for event in raw_events:
+        if not isinstance(event, dict):
+            continue
+        event_type = event.get("type")
+        timestamp = event.get("timestamp")
+        if not event_type or timestamp is None:
+            continue
+        try:
+            normalized.append(
+                {
+                    "type": str(event_type),
+                    "timestamp": float(timestamp),
+                    "confidence": float(event.get("confidence", 1.0)),
+                    "source": str(event.get("source", "export")),
+                }
+            )
+        except (TypeError, ValueError):
+            continue
+    return sorted(normalized, key=lambda item: item["timestamp"])
+
+
+def resolve_phase_analysis(
+    record: dict[str, Any],
+    samples: list[dict[str, Any]],
+    legacy_markers: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Prefer user-confirmed events from export, then detected export events, then compute."""
+    computed = find_swing_phases(samples, legacy_markers)
+    confirmed = _normalize_export_events(record.get("confirmedEvents"))
+    exported = _normalize_export_events(record.get("detectedEvents"))
+
+    if confirmed:
+        events = confirmed
+    elif exported:
+        events = exported
+    else:
+        return computed
+
+    event_map = {event["type"]: event["timestamp"] for event in events}
+    phase_metrics = _phase_durations(event_map)
+    phase_chain_complete = all(key in event_map for key in PHASE_ORDER)
+    swing_mode = str(record.get("swingMode") or ("full" if "contactGuess" in event_map else "practice"))
+    flaw_tags = record.get("flawTags")
+    fault_flags = [str(tag) for tag in flaw_tags] if isinstance(flaw_tags, list) and flaw_tags else computed["faultFlags"]
+
+    return {
+        "analysisVersion": record.get("analysisVersion") or computed.get("analysisVersion"),
+        "swingMode": swing_mode,
+        "detectedEvents": events,
+        "faultFlags": fault_flags,
+        "phaseMetrics": phase_metrics,
+        "phaseChainComplete": phase_chain_complete,
+    }

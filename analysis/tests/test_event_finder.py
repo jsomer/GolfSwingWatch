@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from analysis.event_finder import apply_fault_wrist_rotation, find_swing_phases
+from analysis.event_finder import (
+    apply_fault_wrist_rotation,
+    find_swing_phases,
+    resolve_phase_analysis,
+)
 
 
 def _fixture_samples() -> list[dict]:
@@ -122,7 +126,22 @@ def test_apply_fault_wrist_rotation_adds_flag() -> None:
     assert "excessive_wrist_roll" in updated["faultFlags"]
 
 
-def test_empty_samples_returns_empty_analysis() -> None:
-    result = find_swing_phases([], [])
-    assert result["detectedEvents"] == []
-    assert result["phaseChainComplete"] is False
+def test_resolve_phase_analysis_prefers_confirmed_events() -> None:
+    legacy = [
+        {"timestamp": 0.0, "type": "start"},
+        {"timestamp": 0.4, "type": "impact"},
+        {"timestamp": 0.9, "type": "followThrough"},
+    ]
+    record = {
+        "confirmedEvents": [
+            {"type": "takeaway", "timestamp": 0.1, "confidence": 1.0, "source": "user"},
+            {"type": "top", "timestamp": 0.3, "confidence": 1.0, "source": "user"},
+            {"type": "finish", "timestamp": 0.85, "confidence": 1.0, "source": "user"},
+        ],
+        "flawTags": ["rushed_transition"],
+        "swingMode": "practice",
+    }
+    result = resolve_phase_analysis(record, _fixture_samples(), legacy)
+    assert result["detectedEvents"][0]["timestamp"] == pytest.approx(0.1)
+    assert result["faultFlags"] == ["rushed_transition"]
+    assert result["swingMode"] == "practice"

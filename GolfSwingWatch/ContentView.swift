@@ -153,38 +153,57 @@ private struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    let record: SwingRecord
     let recordID: UUID
     let previousRecord: SwingRecord?
     let similarityScorer: SwingSimilarityScorer
     let coach: CoachingEngine
 
+    @State private var workingRecord: SwingRecord
     @State private var showDeleteConfirmation = false
+
+    init(
+        record: SwingRecord,
+        recordID: UUID,
+        previousRecord: SwingRecord?,
+        similarityScorer: SwingSimilarityScorer,
+        coach: CoachingEngine
+    ) {
+        self.recordID = recordID
+        self.previousRecord = previousRecord
+        self.similarityScorer = similarityScorer
+        self.coach = coach
+        _workingRecord = State(initialValue: record)
+    }
 
     var body: some View {
         List {
             Section("Summary") {
-                Text("Club: \(record.club)")
-                Text("Rating: \(record.rating)/5")
-                Text("Samples: \(record.samples.count)")
-                Text("Recorded: \(record.date.formatted())")
-                if !record.notes.isEmpty {
-                    Text("Notes: \(record.notes)")
+                Text("Club: \(workingRecord.club)")
+                Text("Rating: \(workingRecord.rating)/5")
+                Text("Samples: \(workingRecord.samples.count)")
+                Text("Recorded: \(workingRecord.date.formatted())")
+                Text("Mode: \(workingRecord.swingMode.rawValue.capitalized)")
+                if !workingRecord.notes.isEmpty {
+                    Text("Notes: \(workingRecord.notes)")
                 }
             }
 
             Section("Analytics") {
-                Text("Tempo Ratio: \(record.analytics.tempoRatio, specifier: "%.2f")")
-                Text("Peak Rotation: \(record.analytics.peakRotationalVelocity, specifier: "%.2f")")
-                Text("Avg Accel: \(record.analytics.averageAcceleration, specifier: "%.2f")")
-                Text("Plane Stability: \(record.analytics.swingPlaneStability, specifier: "%.2f")")
-                Text("Confidence: \(record.analytics.confidence, specifier: "%.2f")")
+                Text("Tempo Ratio: \(workingRecord.analytics.tempoRatio, specifier: "%.2f")")
+                Text("Peak Rotation: \(workingRecord.analytics.peakRotationalVelocity, specifier: "%.2f")")
+                Text("Avg Accel: \(workingRecord.analytics.averageAcceleration, specifier: "%.2f")")
+                Text("Plane Stability: \(workingRecord.analytics.swingPlaneStability, specifier: "%.2f")")
+                Text("Confidence: \(workingRecord.analytics.confidence, specifier: "%.2f")")
+            }
+
+            SwingPhaseLabelView(record: workingRecord) { updated in
+                persist(updated)
             }
 
             if let previousRecord {
                 Section("Comparison") {
                     let similarity = similarityScorer.score(
-                        lhs: record.analytics,
+                        lhs: workingRecord.analytics,
                         rhs: previousRecord.analytics
                     )
                     Text("Similarity to previous swing: \(similarity, specifier: "%.2f")")
@@ -192,8 +211,8 @@ private struct SessionDetailView: View {
             }
 
             Section("Coaching") {
-                let generated = coach.recommendations(for: record.analytics, rating: record.rating)
-                let allTips = Array(Set(record.recommendations + generated))
+                let generated = coach.recommendations(for: workingRecord.analytics, rating: workingRecord.rating)
+                let allTips = Array(Set(workingRecord.recommendations + generated))
                 ForEach(allTips, id: \.self) { tip in
                     Text(tip)
                 }
@@ -206,6 +225,9 @@ private struct SessionDetailView: View {
             }
         }
         .navigationTitle("Swing Detail")
+        .onAppear {
+            ensurePhaseAnalysis()
+        }
         .confirmationDialog(
             "Delete this swing?",
             isPresented: $showDeleteConfirmation,
@@ -216,6 +238,38 @@ private struct SessionDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private func ensurePhaseAnalysis() {
+        guard workingRecord.detectedEvents.isEmpty else { return }
+        let analysis = SwingPhaseDetector.analyze(
+            samples: workingRecord.samples,
+            legacyMarkers: workingRecord.eventMarkers
+        )
+        let enriched = SwingRecord(
+            id: workingRecord.id,
+            date: workingRecord.date,
+            rating: workingRecord.rating,
+            club: workingRecord.club,
+            notes: workingRecord.notes,
+            samples: workingRecord.samples,
+            eventMarkers: workingRecord.eventMarkers,
+            analytics: workingRecord.analytics,
+            recommendations: workingRecord.recommendations,
+            swingMode: analysis.swingMode,
+            detectedEvents: analysis.detectedEvents,
+            confirmedEvents: workingRecord.confirmedEvents,
+            flawTags: analysis.faultFlags,
+            analysisVersion: analysis.analysisVersion
+        )
+        workingRecord = enriched
+        persist(enriched)
+    }
+
+    private func persist(_ record: SwingRecord) {
+        let repository = SwingRepository(modelContext: modelContext)
+        try? repository.save(record: record)
+        workingRecord = record
     }
 
     private func deleteRecord() {

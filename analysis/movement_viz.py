@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from analysis.event_finder import apply_fault_wrist_rotation, find_swing_phases
+from analysis.event_finder import apply_fault_wrist_rotation, find_swing_phases, resolve_phase_analysis
 from analysis.follow_through import compute_follow_through_metrics
 from analysis.swing_trim import trim_record
 
@@ -119,7 +119,7 @@ def movement_payload(record: dict[str, Any]) -> dict[str, Any]:
     start_time = samples[0]["timestamp"]
     times = [sample["timestamp"] - start_time for sample in samples]
 
-    phase_analysis = find_swing_phases(samples, legacy_markers)
+    phase_analysis = resolve_phase_analysis(record, samples, legacy_markers)
     detected_events = phase_analysis["detectedEvents"]
     follow_through = compute_follow_through_metrics(samples, detected_events)
     phase_analysis = apply_fault_wrist_rotation(
