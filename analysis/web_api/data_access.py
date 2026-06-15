@@ -45,6 +45,14 @@ def load_features(path_override: str | None = None) -> pd.DataFrame:
         "time_to_impact_seconds",
         "follow_through_seconds",
         "tempo_ratio",
+        "backswing_duration_seconds",
+        "downswing_duration_seconds",
+        "phase_transition_ratio",
+        "follow_through_roll_deg",
+        "follow_through_yaw_deg",
+        "follow_through_pitch_deg",
+        "follow_through_rotation_deg",
+        "follow_through_direction_deg",
     ):
         if col in frame.columns:
             frame[col] = pd.to_numeric(frame[col], errors="coerce")

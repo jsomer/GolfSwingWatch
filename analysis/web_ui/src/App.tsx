@@ -81,6 +81,32 @@ export function App() {
     }));
   }, [records]);
 
+  const followThroughSeries = useMemo(() => {
+    if (!records?.items) return [];
+    return records.items
+      .map((item) => {
+        const rotation = Number(item.follow_through_rotation_deg);
+        const roll = Number(item.follow_through_roll_deg);
+        const yaw = Number(item.follow_through_yaw_deg);
+        if (Number.isNaN(rotation)) return null;
+        return {
+          label: `${String(item.club ?? "?")} · ${String(item.date ?? "").slice(0, 10)}`,
+          rotation,
+          roll: Number.isNaN(roll) ? 0 : roll,
+          yaw: Number.isNaN(yaw) ? 0 : yaw,
+          direction: String(item.follow_through_direction_label ?? "")
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .slice(0, 20);
+  }, [records]);
+
+  const avgFollowThroughRotation = useMemo(() => {
+    if (!followThroughSeries.length) return null;
+    const total = followThroughSeries.reduce((sum, item) => sum + item.rotation, 0);
+    return total / followThroughSeries.length;
+  }, [followThroughSeries]);
+
   const tempoTrend = useMemo(() => {
     if (!records?.items) return [];
     const grouped = new Map<string, { date: string; total: number; count: number }>();
@@ -166,9 +192,13 @@ export function App() {
           <h2>Avg Peak Rotation</h2>
           <strong>{formatNumber(summary?.avg_peak_rotational_velocity ?? null)}</strong>
         </article>
+        <article>
+          <h2>Avg Wrist Return</h2>
+          <strong>{formatNumber(avgFollowThroughRotation)}°</strong>
+        </article>
       </section>
 
-      <section className="charts">
+      <section className="charts charts-three">
         <article>
           <h3>Swings by Club</h3>
           <ResponsiveContainer width="100%" height={280}>
@@ -198,6 +228,23 @@ export function App() {
             </LineChart>
           </ResponsiveContainer>
         </article>
+
+        <article>
+          <h3>Wrist Return Rotation</h3>
+          <p className="chart-copy">Net wrist rotation from impact through follow-through.</p>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={followThroughSeries}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" hide />
+              <YAxis unit="°" />
+              <Tooltip
+                formatter={(value: number) => [`${value.toFixed(1)}°`, "Rotation"]}
+                labelFormatter={(label) => String(label)}
+              />
+              <Bar dataKey="rotation" fill="#8e24aa" name="Rotation" />
+            </BarChart>
+          </ResponsiveContainer>
+        </article>
       </section>
 
       <MovementExplorer />
@@ -213,6 +260,8 @@ export function App() {
                 <th>Club</th>
                 <th>Rating</th>
                 <th>Tempo</th>
+                <th>Wrist Return</th>
+                <th>Return Direction</th>
                 <th>Peak Rotation</th>
               </tr>
             </thead>
@@ -224,6 +273,12 @@ export function App() {
                   <td>{String(item.club ?? "")}</td>
                   <td>{String(item.rating ?? "")}</td>
                   <td>{String(item.tempo_ratio ?? "")}</td>
+                  <td>
+                    {item.follow_through_rotation_deg != null
+                      ? `${Number(item.follow_through_rotation_deg).toFixed(1)}°`
+                      : ""}
+                  </td>
+                  <td>{String(item.follow_through_direction_label ?? "")}</td>
                   <td>{String(item.peak_rotational_velocity ?? "")}</td>
                 </tr>
               ))}

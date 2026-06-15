@@ -9,17 +9,29 @@ final class WatchSyncService: NSObject, ObservableObject {
 
     @Published private(set) var statusMessage = "Sync idle"
     @Published private(set) var isSending = false
+    @Published var autoSyncAfterSave: Bool {
+        didSet {
+            UserDefaults.standard.set(autoSyncAfterSave, forKey: Self.autoSyncAfterSaveKey)
+        }
+    }
+
     @Published var autoDeleteAfterSync: Bool {
         didSet {
             UserDefaults.standard.set(autoDeleteAfterSync, forKey: Self.autoDeleteKey)
         }
     }
 
+    private static let autoSyncAfterSaveKey = "autoSyncAfterSave"
     private static let autoDeleteKey = "autoDeleteAfterSync"
 
     private var modelContext: ModelContext?
 
     private override init() {
+        if UserDefaults.standard.object(forKey: Self.autoSyncAfterSaveKey) == nil {
+            UserDefaults.standard.set(false, forKey: Self.autoSyncAfterSaveKey)
+        }
+        autoSyncAfterSave = UserDefaults.standard.bool(forKey: Self.autoSyncAfterSaveKey)
+
         if UserDefaults.standard.object(forKey: Self.autoDeleteKey) == nil {
             UserDefaults.standard.set(true, forKey: Self.autoDeleteKey)
         }

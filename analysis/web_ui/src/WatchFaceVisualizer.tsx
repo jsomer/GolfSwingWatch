@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Plot from "react-plotly.js";
+import type { PlotMouseEvent } from "plotly.js";
 
 type EventMarker = { type: string; time: number };
 
@@ -17,6 +19,18 @@ type CalibrationOffsets = {
   yawDeg: number;
 };
 
+const MARKER_COLORS: Record<string, string> = {
+  address: "#6b7280",
+  takeaway: "#43a047",
+  top: "#fb8c00",
+  downswingStart: "#8e24aa",
+  contactGuess: "#ef5350",
+  finish: "#1e88e5",
+  start: "#43a047",
+  impact: "#ef5350",
+  followThrough: "#1e88e5"
+};
+
 const toDegrees = (radians: number): number => (radians * 180) / Math.PI;
 const DEFAULT_CALIBRATION: CalibrationOffsets = {
   pitchDeg: 0,
@@ -33,7 +47,9 @@ const resolveAddressIndex = (
 ): number => {
   if (times.length === 0) return 0;
 
-  const startMarker = eventMarkers.find((marker) => marker.type === "start");
+  const startMarker = eventMarkers.find(
+    (marker) => marker.type === "address" || marker.type === "start"
+  );
   if (startMarker) {
     const targetTime = Math.max(0, startMarker.time - ADDRESS_LEAD_IN_SECONDS);
     return times.reduce(
@@ -58,8 +74,27 @@ const resolveAddressIndex = (
 };
 
 const markerLabel = (type: string): string => {
-  if (type === "followThrough") return "Follow-through";
-  return type.charAt(0).toUpperCase() + type.slice(1);
+  const labels: Record<string, string> = {
+    address: "Address",
+    takeaway: "Takeaway",
+    top: "Top",
+    downswingStart: "Downswing start",
+    contactGuess: "Contact (guess)",
+    finish: "Finish",
+    followThrough: "Follow-through",
+    start: "Start",
+    impact: "Impact"
+  };
+  return labels[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
+};
+
+const nearestIndexForTime = (times: number[], targetTime: number): number => {
+  if (times.length === 0) return 0;
+  return times.reduce(
+    (best, time, index) =>
+      Math.abs(time - targetTime) < Math.abs(times[best] - targetTime) ? index : best,
+    0
+  );
 };
 
 type CalibrationDialProps = {
@@ -121,27 +156,22 @@ export function WatchFaceVisualizer({
   useEffect(() => {
     if (!playing || times.length < 2) return;
 
-    let index = playbackStartIndex.current;
-    let lastTick = performance.now();
+    const startWall = performance.now();
+    const startSampleTime = times[playbackStartIndex.current] ?? 0;
     let raf = 0;
 
     const step = (now: number) => {
-      const elapsedSeconds = (now - lastTick) / 1000;
-      lastTick = now;
-      const currentTime = times[index] ?? 0;
-      const targetTime = currentTime + elapsedSeconds;
+      const elapsedSeconds = (now - startWall) / 1000;
+      const targetTime = startSampleTime + elapsedSeconds;
+      const endTime = times[maxIndex] ?? 0;
 
-      while (index < maxIndex && (times[index + 1] ?? 0) <= targetTime) {
-        index += 1;
-      }
-
-      if (index >= maxIndex) {
+      if (targetTime >= endTime) {
         setPlaying(false);
         setFrameIndex(maxIndex);
         return;
       }
 
-      setFrameIndex(index);
+      setFrameIndex(nearestIndexForTime(times, targetTime));
       raf = requestAnimationFrame(step);
     };
 
@@ -163,6 +193,19 @@ export function WatchFaceVisualizer({
   const deltaRoll = currentRoll - referenceRoll;
   const deltaYaw = currentYaw - referenceYaw;
 
+  const deltaPitchSeries = useMemo(
+    () => pitch.map((value) => toDegrees(value - referencePitch)),
+    [pitch, referencePitch]
+  );
+  const deltaRollSeries = useMemo(
+    () => roll.map((value) => toDegrees(value - referenceRoll)),
+    [roll, referenceRoll]
+  );
+  const deltaYawSeries = useMemo(
+    () => yaw.map((value) => toDegrees(value - referenceYaw)),
+    [yaw, referenceYaw]
+  );
+
   const displayPitchDeg = toDegrees(deltaPitch) + calibration.pitchDeg;
   const displayRollDeg = toDegrees(deltaRoll) + calibration.rollDeg;
   const displayYawDeg = toDegrees(deltaYaw) + calibration.yawDeg;
@@ -181,6 +224,100 @@ export function WatchFaceVisualizer({
   const showMarkerHint =
     nearestMarker !== null && Math.abs(nearestMarker.time - currentTime) < 0.05;
 
+  const timelineYRange = useMemo(() => {
+    const values = [...deltaPitchSeries, ...deltaRollSeries, ...deltaYawSeries];
+    if (!values.length) return [-10, 10];
+    const maxAbs = Math.max(10, ...values.map(Math.abs));
+    return [-maxAbs * 1.15, maxAbs * 1.15];
+  }, [deltaPitchSeries, deltaRollSeries, deltaYawSeries]);
+
+  const pitchYRange = useMemo(() => {
+    if (!deltaPitchSeries.length) return [-10, 10];
+    const maxAbs = Math.max(10, ...deltaPitchSeries.map(Math.abs));
+    return [-maxAbs * 1.15, maxAbs * 1.15];
+  }, [deltaPitchSeries]);
+
+  const timelineShapes = useMemo(
+    () => [
+      ...eventMarkers.map((marker) => ({
+        type: "line" as const,
+        x0: marker.time,
+        x1: marker.time,
+        y0: timelineYRange[0],
+        y1: timelineYRange[1],
+        line: {
+          color: MARKER_COLORS[marker.type] ?? "#757575",
+          width: 1.5,
+          dash: "dash" as const
+        }
+      })),
+      {
+        type: "line" as const,
+        x0: currentTime,
+        x1: currentTime,
+        y0: timelineYRange[0],
+        y1: timelineYRange[1],
+        line: { color: "#111827", width: 3 }
+      }
+    ],
+    [eventMarkers, currentTime, timelineYRange]
+  );
+
+  const pitchShapes = useMemo(
+    () => [
+      {
+        type: "line" as const,
+        x0: times[0] ?? 0,
+        x1: times[maxIndex] ?? 0,
+        y0: 0,
+        y1: 0,
+        line: { color: "#9ca3af", width: 1, dash: "dot" as const }
+      },
+      ...eventMarkers.map((marker) => ({
+        type: "line" as const,
+        x0: marker.time,
+        x1: marker.time,
+        y0: pitchYRange[0],
+        y1: pitchYRange[1],
+        line: {
+          color: MARKER_COLORS[marker.type] ?? "#757575",
+          width: 1.5,
+          dash: "dash" as const
+        }
+      })),
+      {
+        type: "line" as const,
+        x0: currentTime,
+        x1: currentTime,
+        y0: pitchYRange[0],
+        y1: pitchYRange[1],
+        line: { color: "#111827", width: 3 }
+      }
+    ],
+    [eventMarkers, currentTime, pitchYRange, times, maxIndex]
+  );
+
+  const seekToTime = useCallback(
+    (targetTime: number) => {
+      setPlaying(false);
+      setFrameIndex(nearestIndexForTime(times, targetTime));
+    },
+    [times]
+  );
+
+  const handleTimelineClick = useCallback(
+    (event: Readonly<PlotMouseEvent>) => {
+      const point = event.points?.[0];
+      if (point?.x === undefined) return;
+      seekToTime(Number(point.x));
+    },
+    [seekToTime]
+  );
+
+  const plotScrubProps = {
+    onClick: handleTimelineClick
+  };
+
   const updateCalibration = (axis: keyof CalibrationOffsets, value: number) => {
     setCalibration((current) => ({ ...current, [axis]: value }));
   };
@@ -189,9 +326,8 @@ export function WatchFaceVisualizer({
     <article className="watch-face-panel">
       <h4>Watch Position</h4>
       <p className="movement-copy">
-        Scrub to a moment where you know how the watch face is oriented (address is a good choice),
-        set that as the baseline, then adjust the dials until the model matches. The face updates live
-        as you move through the swing.
+        Scrub the timeline or click a chart to move through the swing. The vertical line marks the
+        current frame shown on the 3D watch model.
       </p>
 
       <div className="watch-face-stage">
@@ -244,6 +380,100 @@ export function WatchFaceVisualizer({
         </div>
       </div>
 
+      {times.length >= 2 ? (
+        <div className="watch-face-timeline-charts">
+          <Plot
+            data={[
+              {
+                x: times,
+                y: deltaPitchSeries,
+                type: "scatter",
+                mode: "lines",
+                name: "Pitch Δ",
+                line: { color: "#fb8c00", width: 2 }
+              },
+              {
+                x: times,
+                y: deltaRollSeries,
+                type: "scatter",
+                mode: "lines",
+                name: "Roll Δ",
+                line: { color: "#1e88e5", width: 2 }
+              },
+              {
+                x: times,
+                y: deltaYawSeries,
+                type: "scatter",
+                mode: "lines",
+                name: "Yaw Δ",
+                line: { color: "#8e24aa", width: 2 }
+              }
+            ]}
+            layout={{
+              title: "Watch Position Timeline",
+              xaxis: { title: "Seconds" },
+              yaxis: { title: "Degrees from baseline", range: timelineYRange },
+              shapes: timelineShapes,
+              margin: { t: 48, r: 20, b: 48, l: 56 },
+              height: 260,
+              legend: { orientation: "h", y: -0.25 },
+              hovermode: "x unified"
+            }}
+            config={{ displayModeBar: false, responsive: true }}
+            style={{ width: "100%" }}
+            {...plotScrubProps}
+          />
+
+          <Plot
+            data={[
+              {
+                x: times,
+                y: deltaPitchSeries,
+                type: "scatter",
+                mode: "lines",
+                name: "Wrist flexion",
+                line: { color: "#fb8c00", width: 3 },
+                fill: "tozeroy",
+                fillcolor: "rgba(251, 140, 0, 0.12)"
+              }
+            ]}
+            layout={{
+              title: "Wrist Up / Down (Pitch)",
+              xaxis: { title: "Seconds" },
+              yaxis: {
+                title: "Degrees from baseline",
+                range: pitchYRange,
+                zeroline: true,
+                zerolinecolor: "#9ca3af"
+              },
+              shapes: pitchShapes,
+              annotations: [
+                {
+                  x: 0.01,
+                  y: 0.98,
+                  xref: "paper",
+                  yref: "paper",
+                  text: "↑ face tilts up · ↓ face tilts down",
+                  showarrow: false,
+                  font: { size: 11, color: "#6b7280" },
+                  xanchor: "left",
+                  yanchor: "top"
+                }
+              ],
+              margin: { t: 48, r: 20, b: 48, l: 56 },
+              height: 260,
+              showlegend: false,
+              hovermode: "x"
+            }}
+            config={{ displayModeBar: false, responsive: true }}
+            style={{ width: "100%" }}
+            {...plotScrubProps}
+          />
+        </div>
+      ) : (
+        <p className="watch-face-timeline-empty">Not enough samples to render the position timeline.</p>
+      )}
+
       <section className="watch-face-calibration-panel">
         <h5>Face angle calibration</h5>
         <p className="watch-face-calibration-copy">
@@ -286,10 +516,16 @@ export function WatchFaceVisualizer({
       )}
 
       <div className="watch-face-controls">
+        <div className="watch-face-timeline-labels">
+          <span>{(times[0] ?? 0).toFixed(2)}s</span>
+          <strong>{currentTime.toFixed(2)}s</strong>
+          <span>{(times[maxIndex] ?? 0).toFixed(2)}s</span>
+        </div>
         <input
           type="range"
           min={0}
           max={maxIndex}
+          step={1}
           value={frameIndex}
           onChange={(event) => {
             setPlaying(false);

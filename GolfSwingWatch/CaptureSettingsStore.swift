@@ -8,9 +8,14 @@ final class CaptureSettingsStore: ObservableObject {
     static let minBufferCapacity = 500
     static let maxBufferCapacity = 10_000
     static let defaultBufferCapacity = 3_000
-    static let sampleRateHz = 50.0
+
+    static let minSampleRateHz = 50.0
+    static let maxSampleRateHz = 100.0
+    static let defaultSampleRateHz = 50.0
+    static let sampleRateStepHz = 10.0
 
     private static let bufferCapacityKey = "captureBufferCapacity"
+    private static let sampleRateKey = "captureSampleRateHz"
 
     @Published var bufferCapacity: Int {
         didSet {
@@ -23,12 +28,30 @@ final class CaptureSettingsStore: ObservableObject {
         }
     }
 
+    @Published var sampleRateHz: Double {
+        didSet {
+            let clamped = Self.clampSampleRate(sampleRateHz)
+            if clamped != sampleRateHz {
+                sampleRateHz = clamped
+                return
+            }
+            UserDefaults.standard.set(clamped, forKey: Self.sampleRateKey)
+        }
+    }
+
     private init() {
-        let stored = UserDefaults.standard.integer(forKey: Self.bufferCapacityKey)
-        if stored == 0 {
+        let storedCapacity = UserDefaults.standard.integer(forKey: Self.bufferCapacityKey)
+        if storedCapacity == 0 {
             bufferCapacity = Self.defaultBufferCapacity
         } else {
-            bufferCapacity = Self.clamp(stored)
+            bufferCapacity = Self.clamp(storedCapacity)
+        }
+
+        let storedRate = UserDefaults.standard.double(forKey: Self.sampleRateKey)
+        if storedRate == 0 {
+            sampleRateHz = Self.defaultSampleRateHz
+        } else {
+            sampleRateHz = Self.clampSampleRate(storedRate)
         }
     }
 
@@ -36,7 +59,12 @@ final class CaptureSettingsStore: ObservableObject {
         min(max(value, minBufferCapacity), maxBufferCapacity)
     }
 
-    static func estimatedSeconds(for capacity: Int) -> Double {
+    static func clampSampleRate(_ value: Double) -> Double {
+        let stepped = (value / sampleRateStepHz).rounded() * sampleRateStepHz
+        return min(max(stepped, minSampleRateHz), maxSampleRateHz)
+    }
+
+    func estimatedSeconds(for capacity: Int) -> Double {
         Double(capacity) / sampleRateHz
     }
 
@@ -44,6 +72,7 @@ final class CaptureSettingsStore: ObservableObject {
         [
             "type": "captureSettings",
             "bufferCapacity": bufferCapacity,
+            "sampleRateHz": sampleRateHz,
         ]
     }
 }

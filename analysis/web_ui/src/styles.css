@@ -46,7 +46,7 @@ body {
 
 .kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
@@ -73,6 +73,60 @@ body {
   grid-template-columns: repeat(2, minmax(320px, 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.charts-three {
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
+}
+
+.chart-copy {
+  margin-top: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.follow-through-panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.follow-through-summary {
+  margin-bottom: 1rem;
+}
+
+.follow-through-label {
+  display: block;
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.follow-through-value {
+  font-size: 1.75rem;
+  color: #111827;
+}
+
+.follow-through-direction {
+  margin: 0.5rem 0;
+  color: #374151;
+  font-weight: 600;
+}
+
+.follow-through-components {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.follow-through-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 1rem;
 }
 
 .charts article,
@@ -117,6 +171,35 @@ body {
   padding: 0.5rem;
 }
 
+.movement-coaching {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.movement-coaching h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+.movement-coaching ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #1f2937;
+}
+
+.movement-coaching li {
+  margin-bottom: 0.35rem;
+  line-height: 1.45;
+}
+
+.movement-coaching li:last-child {
+  margin-bottom: 0;
+}
+
 .movement-legend {
   display: flex;
   flex-wrap: wrap;
@@ -136,6 +219,50 @@ body {
   width: 1rem;
   height: 0.2rem;
   border-radius: 999px;
+}
+
+.movement-coaching,
+.movement-faults {
+  margin-bottom: 1rem;
+}
+
+.movement-faults ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  color: #b45309;
+}
+
+.movement-phase-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.movement-legend-swatch.address {
+  background: #6b7280;
+}
+
+.movement-legend-swatch.takeaway {
+  background: #43a047;
+}
+
+.movement-legend-swatch.top {
+  background: #fb8c00;
+}
+
+.movement-legend-swatch.downswing {
+  background: #8e24aa;
+}
+
+.movement-legend-swatch.contact {
+  background: #ef5350;
+}
+
+.movement-legend-swatch.finish {
+  background: #1e88e5;
 }
 
 .movement-legend-swatch.start {
@@ -275,6 +402,33 @@ body {
   margin-top: 1rem;
 }
 
+.watch-face-timeline-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.watch-face-timeline-empty {
+  margin-top: 1rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.watch-face-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.35rem;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.watch-face-timeline-labels strong {
+  color: #111827;
+  font-size: 0.95rem;
+}
+
 .watch-face-controls input[type="range"] {
   width: 100%;
 }
@@ -304,7 +458,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .watch-face-dials {
+  .watch-face-dials,
+  .watch-face-timeline-charts {
     grid-template-columns: 1fr;
   }
 }
@@ -335,7 +490,9 @@ td {
   .kpis {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
-  .charts {
+  .charts,
+  .charts-three,
+  .follow-through-charts {
     grid-template-columns: 1fr;
   }
 }

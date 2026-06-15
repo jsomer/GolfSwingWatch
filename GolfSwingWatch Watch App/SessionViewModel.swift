@@ -14,6 +14,7 @@ final class SessionViewModel: ObservableObject {
     @Published private(set) var state: SessionState = .idle
     @Published private(set) var sampleCount = 0
     @Published private(set) var bufferCapacity: Int
+    @Published private(set) var sampleRateHz: Double
     @Published private(set) var bufferIsFull = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastAnalytics: SwingAnalytics?
@@ -31,24 +32,30 @@ final class SessionViewModel: ObservableObject {
     private var settingsCancellable: AnyCancellable?
 
     init(captureService: MotionCaptureService? = nil) {
-        let initialCapacity = CaptureSettingsStore.shared.bufferCapacity
+        let settings = CaptureSettingsStore.shared
+        let initialCapacity = settings.bufferCapacity
         self.bufferCapacity = initialCapacity
+        self.sampleRateHz = settings.sampleRateHz
         self.ringBuffer = RingBuffer(capacity: initialCapacity)
         self.captureService = captureService ?? MotionCaptureService()
         self.captureService.onSample = { [weak self] sample in
             self?.handleIncoming(sample: sample)
         }
 
-        settingsCancellable = CaptureSettingsStore.shared.$bufferCapacity
-            .sink { [weak self] capacity in
-                self?.applyBufferCapacity(capacity)
-            }
+        settingsCancellable = Publishers.CombineLatest(
+            CaptureSettingsStore.shared.$bufferCapacity,
+            CaptureSettingsStore.shared.$sampleRateHz
+        )
+        .sink { [weak self] capacity, rate in
+            self?.applyBufferCapacity(capacity)
+            self?.applySampleRate(rate)
+        }
     }
 
     func startSession() {
         do {
             resetSessionBuffers()
-            try captureService.start()
+            try captureService.start(sampleRateHz: sampleRateHz)
             state = .recording
             lastError = nil
         } catch {
@@ -77,39 +84,58 @@ final class SessionViewModel: ObservableObject {
             lastError = "No samples recorded. Start a session first."
             return
         }
+        guard state != .saving else { return }
 
+        let resumeRecording = state == .recording
+        let markers = eventMarkers
         state = .saving
-        let analytics = extractor.extract(samples: samples, markers: eventMarkers)
-        let recommendations = coach.recommendations(for: analytics, rating: rating)
-        let record = SwingRecord(
-            id: UUID(),
-            date: Date(),
-            rating: rating,
-            club: club,
-            notes: notes,
-            samples: samples,
-            eventMarkers: eventMarkers,
-            analytics: analytics,
-            recommendations: recommendations
-        )
 
-        do {
-            let repository = SwingRepository(modelContext: modelContext)
-            try repository.save(record: record)
-            latestSimilarityScore = latestSavedRecord.map {
-                scorer.score(lhs: analytics, rhs: $0.analytics)
+        Task { @MainActor in
+            await Task.yield()
+
+            let analytics = extractor.extract(samples: samples, markers: markers)
+            let recommendations = coach.recommendations(for: analytics, rating: rating)
+            let record = SwingRecord(
+                id: UUID(),
+                date: Date(),
+                rating: rating,
+                club: club,
+                notes: notes,
+                samples: samples,
+                eventMarkers: markers,
+                analytics: analytics,
+                recommendations: recommendations
+            )
+
+            do {
+                let repository = SwingRepository(modelContext: modelContext)
+                try repository.save(record: record)
+                latestSimilarityScore = latestSavedRecord.map {
+                    scorer.score(lhs: analytics, rhs: $0.analytics)
+                }
+                latestSavedRecord = record
+                lastAnalytics = analytics
+                lastRecommendations = recommendations
+                if WatchSyncService.shared.autoSyncAfterSave {
+                    WatchSyncService.shared.sendRecords([record])
+                }
+                resetSessionBuffers()
+
+                if resumeRecording {
+                    if !captureService.isRunning {
+                        try captureService.start(sampleRateHz: sampleRateHz)
+                    }
+                    state = .recording
+                } else {
+                    captureService.stop()
+                    state = .idle
+                }
+                lastError = nil
+            } catch {
+                captureService.stop()
+                state = .error
+                lastError = "Failed to save swing: \(error.localizedDescription)"
             }
-            latestSavedRecord = record
-            lastAnalytics = analytics
-            lastRecommendations = recommendations
-            WatchSyncService.shared.sendRecords([record])
-            resetSessionBuffers()
-            captureService.stop()
-            state = .idle
-            lastError = nil
-        } catch {
-            state = .error
-            lastError = "Failed to save swing: \(error.localizedDescription)"
         }
     }
 
@@ -128,6 +154,19 @@ final class SessionViewModel: ObservableObject {
         ringBuffer.resize(capacity: capacity)
         sampleCount = ringBuffer.count
         bufferIsFull = state == .recording && ringBuffer.isFull
+    }
+
+    private func applySampleRate(_ rate: Double) {
+        sampleRateHz = rate
+        guard state == .recording, captureService.isRunning else { return }
+        captureService.stop()
+        do {
+            try captureService.start(sampleRateHz: rate)
+            lastError = nil
+        } catch {
+            state = .error
+            lastError = error.localizedDescription
+        }
     }
 
     private func resetSessionBuffers() {

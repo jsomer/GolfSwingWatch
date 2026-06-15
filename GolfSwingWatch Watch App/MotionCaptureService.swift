@@ -25,6 +25,10 @@ final class MotionCaptureService {
             )
         }
 
+        if isRunning {
+            stop()
+        }
+
         motionManager.deviceMotionUpdateInterval = 1.0 / sampleRateHz
         motionManager.startDeviceMotionUpdates(to: queue) { [weak self] motion, _ in
             guard let motion else { return }

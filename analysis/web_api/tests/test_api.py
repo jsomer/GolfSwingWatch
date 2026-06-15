@@ -94,7 +94,16 @@ def test_movement_endpoints(tmp_path):
     detail = client.get(f"/movement/{swing_id}")
     assert detail.status_code == 200
     payload = detail.json()
-    assert payload["sample_count"] == 2
-    assert len(payload["series"]["times"]) == 2
-    assert len(payload["event_markers"]) == 1
-    assert payload["event_markers"][0]["type"] == "impact"
+    assert payload["sample_count"] == 6
+    assert len(payload["series"]["times"]) == 6
+    assert len(payload["event_markers"]) == 3
+    assert len(payload["phase_markers"]) >= 5
+    assert payload["swing_mode"] in {"practice", "full"}
+    assert isinstance(payload["fault_flags"], list)
+    assert payload["recommendations"] == [
+        "Keep your tempo smooth through impact.",
+        "Maintain posture during follow-through.",
+    ]
+    assert payload["follow_through"] is not None
+    assert payload["follow_through"]["rotation_deg"] > 0
+    assert len(payload["follow_through"]["path"]["times"]) >= 1

@@ -12,8 +12,12 @@ import numpy as np
 import pandas as pd
 
 try:
+    from analysis.event_finder import apply_fault_wrist_rotation, find_swing_phases
+    from analysis.follow_through import compute_follow_through_metrics
     from analysis.swing_trim import trim_record
 except ImportError:
+    from event_finder import apply_fault_wrist_rotation, find_swing_phases
+    from follow_through import compute_follow_through_metrics
     from swing_trim import trim_record
 
 
@@ -71,6 +75,24 @@ def _resolve_event_markers(raw_markers: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _resolve_recommendations(raw_recommendations: Any) -> list[str]:
+    if raw_recommendations is None or (
+        isinstance(raw_recommendations, float) and np.isnan(raw_recommendations)
+    ):
+        return []
+    if isinstance(raw_recommendations, list):
+        return [str(item) for item in raw_recommendations if str(item).strip()]
+    if isinstance(raw_recommendations, str):
+        try:
+            parsed = json.loads(raw_recommendations)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            stripped = raw_recommendations.strip()
+            return [stripped] if stripped else []
+    return []
+
+
 def _resolve_samples(raw_samples: Any) -> list[dict[str, Any]]:
     if raw_samples is None or (isinstance(raw_samples, float) and np.isnan(raw_samples)):
         return []
@@ -124,7 +146,11 @@ def extract_features(record: dict[str, Any]) -> dict[str, Any]:
     notes = record.get("notes")
 
     samples = _resolve_samples(record.get("samples"))
-    markers = _resolve_event_markers(record.get("eventMarkers"))
+    legacy_markers = _resolve_event_markers(record.get("eventMarkers"))
+
+    phase_analysis = find_swing_phases(samples, legacy_markers)
+    detected_events = phase_analysis["detectedEvents"]
+    phase_metrics = phase_analysis.get("phaseMetrics", {})
 
     frame = pd.DataFrame(samples)
     required = ["timestamp", "accelX", "accelY", "accelZ", "gyroX", "gyroY", "gyroZ", "pitch", "roll", "yaw"]
@@ -140,12 +166,19 @@ def extract_features(record: dict[str, Any]) -> dict[str, Any]:
     orientation_std = frame[["pitch", "roll", "yaw"]].std(ddof=0).mean()
     swing_plane_stability = 1.0 / (1.0 + float(orientation_std if pd.notna(orientation_std) else 0.0))
 
-    time_to_impact_seconds, follow_through_seconds, tempo_ratio = _tempo_metrics(markers)
+    time_to_impact_seconds, follow_through_seconds, tempo_ratio = _tempo_metrics(legacy_markers)
 
     if len(frame) > 0:
         duration_seconds = float(frame["timestamp"].iloc[-1] - frame["timestamp"].iloc[0])
     else:
         duration_seconds = 0.0
+
+    recommendations = _resolve_recommendations(record.get("recommendations"))
+    follow_through = compute_follow_through_metrics(samples, detected_events)
+    phase_analysis = apply_fault_wrist_rotation(
+        phase_analysis,
+        follow_through.get("follow_through_rotation_deg"),
+    )
 
     return {
         "id": swing_id,
@@ -153,6 +186,15 @@ def extract_features(record: dict[str, Any]) -> dict[str, Any]:
         "rating": rating,
         "club": club,
         "notes": notes,
+        "recommendations": json.dumps(recommendations),
+        "swing_mode": phase_analysis.get("swingMode"),
+        "phase_chain_complete": bool(phase_analysis.get("phaseChainComplete")),
+        "analysis_version": phase_analysis.get("analysisVersion"),
+        "fault_flags": json.dumps(phase_analysis.get("faultFlags", [])),
+        "detected_events": json.dumps(detected_events),
+        "backswing_duration_seconds": phase_metrics.get("backswing_duration_seconds"),
+        "downswing_duration_seconds": phase_metrics.get("downswing_duration_seconds"),
+        "phase_transition_ratio": phase_metrics.get("transition_ratio"),
         "sample_count": int(len(frame)),
         "duration_seconds": duration_seconds,
         "peak_accel_g": float(np.nanmax(accel_mag)) if len(accel_mag) else 0.0,
@@ -163,6 +205,7 @@ def extract_features(record: dict[str, Any]) -> dict[str, Any]:
         "time_to_impact_seconds": time_to_impact_seconds,
         "follow_through_seconds": follow_through_seconds,
         "tempo_ratio": tempo_ratio,
+        **{key: follow_through[key] for key in follow_through if key != "follow_through"},
     }
 
 

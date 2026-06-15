@@ -26,6 +26,19 @@ export type MovementSwingsResponse = {
   items: MovementSwingSummary[];
 };
 
+export type PhaseMarker = {
+  type: string;
+  time: number;
+  confidence?: number;
+  source?: string;
+};
+
+export type PhaseMetrics = {
+  backswing_duration_seconds?: number | null;
+  downswing_duration_seconds?: number | null;
+  transition_ratio?: number | null;
+};
+
 export type MovementDetail = {
   id: string;
   club: string | null;
@@ -41,5 +54,31 @@ export type MovementDetail = {
     roll: number[];
     yaw: number[];
   };
-  event_markers: Array<{ type: string; time: number }>;
+  event_markers: Array<{ type: string; time: number; source?: string }>;
+  phase_markers: PhaseMarker[];
+  recommendations: string[];
+  follow_through: FollowThroughMetrics | null;
+  swing_mode?: string;
+  fault_flags?: string[];
+  phase_metrics?: PhaseMetrics;
+  phase_chain_complete?: boolean;
+  analysis_version?: string;
+};
+
+export type FollowThroughMetrics = {
+  window_start?: string | null;
+  start_time: number;
+  end_time: number;
+  roll_deg: number;
+  yaw_deg: number;
+  pitch_deg: number;
+  rotation_deg: number;
+  direction_deg: number;
+  direction_label: string;
+  path: {
+    times: number[];
+    roll_deg: number[];
+    yaw_deg: number[];
+    pitch_deg: number[];
+  };
 };

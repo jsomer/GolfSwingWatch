@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var exportURL: URL?
     @State private var showExportError = false
     @State private var exportError = ""
+    @State private var showDeleteAllConfirmation = false
     private let similarityScorer = SwingSimilarityScorer()
     private let coach = CoachingEngine()
 
@@ -29,8 +30,15 @@ struct ContentView: View {
                     ) {
                         Text("Buffer: \(captureSettings.bufferCapacity) samples")
                     }
+                    Stepper(
+                        value: $captureSettings.sampleRateHz,
+                        in: CaptureSettingsStore.minSampleRateHz...CaptureSettingsStore.maxSampleRateHz,
+                        step: CaptureSettingsStore.sampleRateStepHz
+                    ) {
+                        Text("Sample rate: \(Int(captureSettings.sampleRateHz)) Hz")
+                    }
                     Text(
-                        "About \(CaptureSettingsStore.estimatedSeconds(for: captureSettings.bufferCapacity), specifier: "%.0f") seconds at 50 Hz. When full, oldest samples roll off until you save."
+                        "About \(captureSettings.estimatedSeconds(for: captureSettings.bufferCapacity), specifier: "%.0f") seconds at \(Int(captureSettings.sampleRateHz)) Hz. When full, oldest samples roll off until you save."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -43,6 +51,12 @@ struct ContentView: View {
                     Text("No swings saved yet on iPhone.")
                         .foregroundStyle(.secondary)
                 } else {
+                    Section {
+                        Button("Delete All Swings", role: .destructive) {
+                            showDeleteAllConfirmation = true
+                        }
+                    }
+
                     ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
                         let domain = record.asDomain()
                         NavigationLink {
@@ -88,6 +102,18 @@ struct ContentView: View {
             } message: {
                 Text(exportError)
             }
+            .confirmationDialog(
+                "Delete all \(records.count) swing(s)?",
+                isPresented: $showDeleteAllConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All", role: .destructive) {
+                    deleteAllRecords()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This cannot be undone.")
+            }
             .onAppear {
                 syncService.configure(modelContext: modelContext)
             }
@@ -114,6 +140,12 @@ struct ContentView: View {
         if exportURL != nil {
             prepareExport()
         }
+    }
+
+    private func deleteAllRecords() {
+        let repository = SwingRepository(modelContext: modelContext)
+        try? repository.deleteAll()
+        exportURL = nil
     }
 }
 

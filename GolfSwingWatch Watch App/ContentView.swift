@@ -10,6 +10,20 @@ struct ContentView: View {
     @State private var notes = ""
     @ObservedObject private var syncService = WatchSyncService.shared
 
+    private var isBusy: Bool {
+        viewModel.state == .saving || syncService.isSending
+    }
+
+    private var busyMessage: String {
+        if viewModel.state == .saving {
+            return "Saving swing..."
+        }
+        if syncService.isSending {
+            return "Sending to iPhone..."
+        }
+        return "Working..."
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
@@ -42,11 +56,31 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
 
-                Stepper("Rating: \(rating)", value: $rating, in: 1...5)
-                    .font(.caption2)
-
-                TextField("Club", text: $club)
-                TextField("Notes", text: $notes)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Rating")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 2) {
+                        ForEach(1...5, id: \.self) { value in
+                            Button {
+                                rating = value
+                            } label: {
+                                Text("\(value)")
+                                    .font(.system(size: 13, weight: rating == value ? .semibold : .regular))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        rating == value
+                                            ? Color.accentColor.opacity(0.35)
+                                            : Color.gray.opacity(0.15)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isBusy)
+                        }
+                    }
+                }
 
                 Button("Save Swing") {
                     viewModel.saveSwing(
@@ -56,7 +90,12 @@ struct ContentView: View {
                         notes: notes
                     )
                 }
-                .disabled(viewModel.sampleCount == 0 || viewModel.state == .saving || viewModel.state == .recording)
+                .disabled(viewModel.sampleCount == 0 || isBusy)
+
+                TextField("Club", text: $club)
+                    .disabled(isBusy)
+                TextField("Notes", text: $notes)
+                    .disabled(isBusy)
 
                 if let analytics = viewModel.lastAnalytics {
                     VStack(alignment: .leading, spacing: 4) {
@@ -92,8 +131,12 @@ struct ContentView: View {
                 Text("Saved swings: \(savedRecords.count)")
                     .font(.caption2)
 
+                Toggle("Sync to iPhone after save", isOn: $syncService.autoSyncAfterSave)
+                    .font(.caption2)
+
                 Toggle("Remove after iPhone sync", isOn: $syncService.autoDeleteAfterSync)
                     .font(.caption2)
+                    .disabled(!syncService.autoSyncAfterSave)
 
                 if !savedRecords.isEmpty {
                     ForEach(savedRecords) { record in
@@ -112,6 +155,7 @@ struct ContentView: View {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.plain)
+                            .disabled(isBusy)
                         }
                     }
                 }
@@ -119,13 +163,28 @@ struct ContentView: View {
                 Button("Send All to iPhone") {
                     syncService.sendAll(savedRecords)
                 }
-                .disabled(savedRecords.isEmpty || viewModel.state == .saving || syncService.isSending)
+                .disabled(savedRecords.isEmpty || isBusy)
 
                 Text(syncService.isSending ? "Sending..." : syncService.statusMessage)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .padding()
+        }
+        .overlay {
+            if isBusy {
+                ZStack {
+                    Color.black.opacity(0.45)
+                    VStack(spacing: 8) {
+                        ProgressView()
+                        Text(busyMessage)
+                            .font(.caption2)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
+                }
+                .ignoresSafeArea()
+            }
         }
         .onAppear {
             syncService.activate()

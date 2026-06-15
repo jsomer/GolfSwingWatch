@@ -1,16 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
 import Plot from "react-plotly.js";
 import { fetchMovementDetail, fetchMovementSwings } from "./api";
-import type { MovementDetail, MovementSwingSummary } from "./types";
+import { FollowThroughRotation } from "./FollowThroughRotation";
+import type { MovementDetail, MovementSwingSummary, PhaseMarker } from "./types";
 import { WatchFaceVisualizer } from "./WatchFaceVisualizer";
 
-const MARKER_COLORS: Record<string, string> = {
-  start: "#43a047",
-  impact: "#ef5350",
-  followThrough: "#1e88e5"
+const LEGACY_MARKER_COLORS: Record<string, string> = {
+  start: "#9ca3af",
+  impact: "#9ca3af",
+  followThrough: "#9ca3af"
 };
 
-const markerShapes = (markers: MovementDetail["event_markers"], yMax: number) =>
+const PHASE_MARKER_COLORS: Record<string, string> = {
+  address: "#6b7280",
+  takeaway: "#43a047",
+  top: "#fb8c00",
+  downswingStart: "#8e24aa",
+  contactGuess: "#ef5350",
+  finish: "#1e88e5"
+};
+
+const FAULT_LABELS: Record<string, string> = {
+  rushed_transition: "Rushed transition",
+  excessive_wrist_roll: "Excessive wrist roll",
+  mid_swing_pause: "Mid-swing pause",
+  incomplete_finish: "Incomplete finish"
+};
+
+const displayMarkers = (movement: MovementDetail): PhaseMarker[] =>
+  movement.phase_markers?.length ? movement.phase_markers : movement.event_markers;
+
+const markerShapes = (markers: PhaseMarker[], yMax: number) =>
   markers.map((marker) => ({
     type: "line" as const,
     x0: marker.time,
@@ -18,7 +38,7 @@ const markerShapes = (markers: MovementDetail["event_markers"], yMax: number) =>
     y0: 0,
     y1: yMax,
     line: {
-      color: MARKER_COLORS[marker.type] ?? "#757575",
+      color: PHASE_MARKER_COLORS[marker.type] ?? LEGACY_MARKER_COLORS[marker.type] ?? "#757575",
       width: 2,
       dash: "dash" as const
     }
@@ -85,6 +105,11 @@ export function MovementExplorer() {
     };
   }, [selectedSwingId]);
 
+  const chartMarkers = useMemo(
+    () => (movement ? displayMarkers(movement) : []),
+    [movement]
+  );
+
   const accelMax = useMemo(() => {
     if (!movement?.series.accel_mag.length) return 1;
     return Math.max(...movement.series.accel_mag) * 1.1;
@@ -121,15 +146,70 @@ export function MovementExplorer() {
               ))}
             </select>
           </label>
-          <div className="movement-legend" aria-label="Swing event markers">
+
+          {movement?.follow_through && (
+            <FollowThroughRotation metrics={movement.follow_through} />
+          )}
+
+          {movement && (movement.recommendations?.length ?? 0) > 0 && (
+            <div className="movement-coaching">
+              <h4>Coaching Suggestions</h4>
+              <ul>
+                {movement.recommendations.map((tip) => (
+                  <li key={tip}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {movement && (movement.fault_flags?.length ?? 0) > 0 && (
+            <div className="movement-faults">
+              <h4>Detected Issues</h4>
+              <ul>
+                {movement.fault_flags!.map((flag) => (
+                  <li key={flag}>{FAULT_LABELS[flag] ?? flag}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {movement?.phase_metrics &&
+            (movement.phase_metrics.backswing_duration_seconds != null ||
+              movement.phase_metrics.downswing_duration_seconds != null) && (
+              <div className="movement-phase-metrics">
+                <span>
+                  Backswing{" "}
+                  {movement.phase_metrics.backswing_duration_seconds?.toFixed(2) ?? "—"}s
+                </span>
+                <span>
+                  Downswing{" "}
+                  {movement.phase_metrics.downswing_duration_seconds?.toFixed(2) ?? "—"}s
+                </span>
+                {movement.phase_metrics.transition_ratio != null && (
+                  <span>Ratio {movement.phase_metrics.transition_ratio.toFixed(2)}</span>
+                )}
+                {movement.swing_mode && <span>Mode {movement.swing_mode}</span>}
+              </div>
+            )}
+
+          <div className="movement-legend" aria-label="Swing phase markers">
             <span className="movement-legend-item">
-              <span className="movement-legend-swatch start" /> Start
+              <span className="movement-legend-swatch address" /> Address
             </span>
             <span className="movement-legend-item">
-              <span className="movement-legend-swatch impact" /> Impact
+              <span className="movement-legend-swatch takeaway" /> Takeaway
             </span>
             <span className="movement-legend-item">
-              <span className="movement-legend-swatch follow" /> Follow-through
+              <span className="movement-legend-swatch top" /> Top
+            </span>
+            <span className="movement-legend-item">
+              <span className="movement-legend-swatch downswing" /> Downswing
+            </span>
+            <span className="movement-legend-item">
+              <span className="movement-legend-swatch contact" /> Contact (guess)
+            </span>
+            <span className="movement-legend-item">
+              <span className="movement-legend-swatch finish" /> Finish
             </span>
           </div>
         </>
@@ -148,7 +228,7 @@ export function MovementExplorer() {
             roll={movement.series.roll}
             yaw={movement.series.yaw}
             gyroMag={movement.series.gyro_mag}
-            eventMarkers={movement.event_markers}
+            eventMarkers={chartMarkers}
           />
 
           <Plot
@@ -165,7 +245,7 @@ export function MovementExplorer() {
               title: "Acceleration Magnitude",
               xaxis: { title: "Seconds" },
               yaxis: { title: "g" },
-              shapes: markerShapes(movement.event_markers, accelMax),
+              shapes: markerShapes(chartMarkers, accelMax),
               margin: { t: 40, r: 20, b: 40, l: 50 },
               height: 280
             }}
@@ -187,7 +267,7 @@ export function MovementExplorer() {
               title: "Rotational Velocity Magnitude",
               xaxis: { title: "Seconds" },
               yaxis: { title: "rad/s" },
-              shapes: markerShapes(movement.event_markers, gyroMax),
+              shapes: markerShapes(chartMarkers, gyroMax),
               margin: { t: 40, r: 20, b: 40, l: 50 },
               height: 280
             }}
@@ -205,7 +285,7 @@ export function MovementExplorer() {
               title: "Watch Orientation",
               xaxis: { title: "Seconds" },
               yaxis: { title: "Radians" },
-              shapes: markerShapes(movement.event_markers, attitudeMax),
+              shapes: markerShapes(chartMarkers, attitudeMax),
               margin: { t: 40, r: 20, b: 40, l: 50 },
               height: 280
             }}

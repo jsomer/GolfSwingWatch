@@ -8,18 +8,31 @@ final class CaptureSettingsStore: ObservableObject {
     static let minBufferCapacity = 500
     static let maxBufferCapacity = 10_000
     static let defaultBufferCapacity = 3_000
-    static let sampleRateHz = 50.0
+
+    static let minSampleRateHz = 50.0
+    static let maxSampleRateHz = 100.0
+    static let defaultSampleRateHz = 50.0
+    static let sampleRateStepHz = 10.0
 
     private static let bufferCapacityKey = "captureBufferCapacity"
+    private static let sampleRateKey = "captureSampleRateHz"
 
     @Published private(set) var bufferCapacity: Int
+    @Published private(set) var sampleRateHz: Double
 
     private init() {
-        let stored = UserDefaults.standard.integer(forKey: Self.bufferCapacityKey)
-        if stored == 0 {
+        let storedCapacity = UserDefaults.standard.integer(forKey: Self.bufferCapacityKey)
+        if storedCapacity == 0 {
             bufferCapacity = Self.defaultBufferCapacity
         } else {
-            bufferCapacity = Self.clamp(stored)
+            bufferCapacity = Self.clamp(storedCapacity)
+        }
+
+        let storedRate = UserDefaults.standard.double(forKey: Self.sampleRateKey)
+        if storedRate == 0 {
+            sampleRateHz = Self.defaultSampleRateHz
+        } else {
+            sampleRateHz = Self.clampSampleRate(storedRate)
         }
     }
 
@@ -27,7 +40,12 @@ final class CaptureSettingsStore: ObservableObject {
         min(max(value, minBufferCapacity), maxBufferCapacity)
     }
 
-    static func estimatedSeconds(for capacity: Int) -> Double {
+    static func clampSampleRate(_ value: Double) -> Double {
+        let stepped = (value / sampleRateStepHz).rounded() * sampleRateStepHz
+        return min(max(stepped, minSampleRateHz), maxSampleRateHz)
+    }
+
+    func estimatedSeconds(for capacity: Int) -> Double {
         Double(capacity) / sampleRateHz
     }
 
@@ -38,16 +56,30 @@ final class CaptureSettingsStore: ObservableObject {
         UserDefaults.standard.set(clamped, forKey: Self.bufferCapacityKey)
     }
 
+    func apply(sampleRateHz newValue: Double) {
+        let clamped = Self.clampSampleRate(newValue)
+        guard clamped != sampleRateHz else { return }
+        sampleRateHz = clamped
+        UserDefaults.standard.set(clamped, forKey: Self.sampleRateKey)
+    }
+
     func apply(payload: [String: Any]) {
         guard payload["type"] as? String == "captureSettings" else { return }
-        guard let rawCapacity = payload["bufferCapacity"] as? Int else { return }
-        apply(bufferCapacity: rawCapacity)
+        if let rawCapacity = payload["bufferCapacity"] as? Int {
+            apply(bufferCapacity: rawCapacity)
+        }
+        if let rawRate = payload["sampleRateHz"] as? Double {
+            apply(sampleRateHz: rawRate)
+        } else if let rawRate = payload["sampleRateHz"] as? Int {
+            apply(sampleRateHz: Double(rawRate))
+        }
     }
 
     func asPayload() -> [String: Any] {
         [
             "type": "captureSettings",
             "bufferCapacity": bufferCapacity,
+            "sampleRateHz": sampleRateHz,
         ]
     }
 }

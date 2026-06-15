@@ -111,7 +111,9 @@ The dashboard on your Mac does not read the iPhone directly. Export a JSON file 
 3. Tap **Share** (top right) when it appears
 4. Choose **AirDrop** to your Mac (or save to Files/iCloud and copy later)
 
-The file is named `golf_swings_export.json`. It contains all swings currently stored on the iPhone, including full sensor samples.
+The file is named `golf_swings_export.json`. It contains **all swings currently stored on the iPhone**, including full sensor samples.
+
+> **macOS duplicate downloads:** If you AirDrop more than once, macOS keeps the first file as `golf_swings_export.json` and renames later exports to `golf_swings_export 2.json`, `golf_swings_export 3.json`, and so on. The file with the plain name is **not** always the newest — check modification dates in Finder or use `--latest` when importing (Step 4).
 
 ---
 
@@ -119,24 +121,65 @@ The file is named `golf_swings_export.json`. It contains all swings currently st
 
 From the **repo root** (`GolfSwingWatch/`):
 
+### Recommended: import the newest export
+
 ```bash
-analysis/import_watch_export.sh ~/Downloads/golf_swings_export.json
+analysis/import_watch_export.sh --latest
 ```
 
-Add `--delete-raw` to remove `data/raw/swings.json` after features are generated. Feature files in `analysis/output/` are kept.
+`--latest` finds the most recently modified `golf_swings_export*.json` in `~/Downloads` and imports it. Use this after every AirDrop to avoid picking a stale file.
 
-Replace the path with wherever AirDrop saved the file.
+### Alternative: import a specific file
+
+Pass the path to the export AirDrop actually saved (quoted if the filename contains spaces):
+
+```bash
+analysis/import_watch_export.sh ~/Downloads/golf_swings_export.json
+analysis/import_watch_export.sh "~/Downloads/golf_swings_export 4.json"
+```
+
+If you pass an older file and a newer export exists in the same folder, the script prints a **WARNING** and suggests `--latest`.
+
+### Options
+
+| Flag | Effect |
+|------|--------|
+| `--latest` | Import newest `golf_swings_export*.json` from `~/Downloads` |
+| `--delete-raw` | Remove `data/raw/swings.json` after features are generated |
+| `--help` | Show usage |
+
+Combine flags in any order:
+
+```bash
+analysis/import_watch_export.sh --latest --delete-raw
+```
 
 ### What the import script does
 
-1. Copies the export to `data/raw/swings.json`
-2. Trims idle noise before/after the swing using accel + gyro magnitude thresholds
+1. Copies the export to `data/raw/swings.json` (overwrites previous import)
+2. Trims idle noise before/after each swing using accel + gyro magnitude thresholds
 3. Runs `analysis/analyze_swings.py` to build feature tables
-4. Optionally removes the raw JSON with `--delete-raw`
+4. Writes:
+   - `analysis/output/swing_features.parquet`
+   - `analysis/output/swing_features.csv`
+5. Optionally removes the raw JSON with `--delete-raw`
+
+Each import **replaces** the previous analysis dataset — it does not merge swings from multiple exports. To keep a dated snapshot, copy the export before importing (see below).
+
+### Verify the import
+
+The script prints how many records were loaded. You can also check manually:
 
 ```bash
-analysis/import_watch_export.sh ~/Downloads/golf_swings_export.json --delete-raw
+# Record count in the raw export
+python3 -c "import json; d=json.load(open('data/raw/swings.json')); r=d if isinstance(d,list) else d['records']; print(len(r), 'swings')"
+
+# Record count in the feature table (requires venv)
+source .venv/bin/activate
+python -c "import pandas as pd; print(len(pd.read_parquet('analysis/output/swing_features.parquet')), 'swings')"
 ```
+
+Compare the count to the swing list in the iPhone app. If numbers don't match, you likely imported the wrong file — re-run with `--latest`.
 
 ### Deleting stored swings
 
@@ -146,17 +189,14 @@ analysis/import_watch_export.sh ~/Downloads/golf_swings_export.json --delete-raw
 | **Watch** | Any time | Trash button on saved swing row |
 | **iPhone** | On demand | Swipe left on session, or **Delete Swing** in detail view |
 | **Mac analysis** | On demand | Re-import with `--delete-raw`, or delete `data/raw/swings.json` manually |
-3. Writes:
-   - `analysis/output/swing_features.parquet`
-   - `analysis/output/swing_features.csv`
 
 ### Keep multiple sessions (optional)
 
 Save dated copies before importing:
 
 ```bash
-cp ~/Downloads/golf_swings_export.json data/raw/swings_2026-06-13.json
-analysis/import_watch_export.sh data/raw/swings_2026-06-13.json
+cp ~/Downloads/golf_swings_export\ 4.json data/raw/swings_2026-06-14.json
+analysis/import_watch_export.sh data/raw/swings_2026-06-14.json
 ```
 
 Only `data/raw/swings.json` is used by default for Movement Explorer. The import script overwrites it each run.
@@ -181,7 +221,7 @@ Open **http://localhost:5173**
 | KPIs, charts, table | `analysis/output/swing_features.parquet` | Per-swing metrics (tempo, peak rotation, etc.) |
 | Movement Explorer | `data/raw/swings.json` | Raw time-series + 3D watch-face visualizer |
 
-After importing new swings, **refresh the browser**.
+After importing new swings, **refresh the browser**. No Docker restart is needed — the compose file bind-mounts `analysis/output/` and `data/raw/` read-only into the API container.
 
 ### Generate features manually (without import script)
 
@@ -219,7 +259,7 @@ GolfSwingWatch/
 [ ] Watch: Send All to iPhone (or rely on per-save sync)
 [ ] iPhone: Confirm swings in Sessions / Watch Sync
 [ ] iPhone: Export → Share → AirDrop to Mac
-[ ] Mac:  analysis/import_watch_export.sh <path-to-json>
+[ ] Mac:  analysis/import_watch_export.sh --latest
 [ ] Mac:  Refresh http://localhost:5173
 ```
 
@@ -232,8 +272,10 @@ GolfSwingWatch/
 | Send All to iPhone unresponsive | Large export blocking UI | Rebuild watch app (recent fix); watch status line for errors |
 | Sync not ready | iPhone app never opened | Launch iPhone app once |
 | Swings not on iPhone | WatchConnectivity tunnel | Same Wi‑Fi on Mac/iPhone/Watch; keep devices unlocked |
-| Dashboard 404 / empty | No feature files yet | Run import script or `analyze_swings.py` |
-| Movement Explorer empty | No raw JSON | Confirm `data/raw/swings.json` exists after import |
+| Dashboard 404 / empty | No feature files yet | Run `analysis/import_watch_export.sh --latest` or `analyze_swings.py` |
+| New swings missing after import | Imported stale export file | macOS renamed newer AirDrops; use `--latest` or pick the newest `golf_swings_export*.json` in Downloads |
+| Import script WARNING about newer file | Explicit path points to old export | Re-run with `--latest` |
+| Movement Explorer empty | No raw JSON | Confirm `data/raw/swings.json` exists after import (omit `--delete-raw`) |
 | Duplicate swings, same data | Saved without new capture | Use full Start → Stop → Save cycle each time |
 
 ---

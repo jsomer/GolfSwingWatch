@@ -17,11 +17,14 @@ final class PhoneSyncService: NSObject, ObservableObject {
 
     private override init() {
         super.init()
-        settingsCancellable = captureSettings.$bufferCapacity
-            .dropFirst()
-            .sink { [weak self] _ in
-                self?.pushCaptureSettingsToWatch()
-            }
+        settingsCancellable = Publishers.Merge(
+            captureSettings.$bufferCapacity.map { _ in () },
+            captureSettings.$sampleRateHz.map { _ in () }
+        )
+        .dropFirst()
+        .sink { [weak self] _ in
+            self?.pushCaptureSettingsToWatch()
+        }
     }
 
     func activate() {
